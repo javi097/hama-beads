@@ -2,7 +2,7 @@
 
 Plan de referencia: `specs/001-core-and-2d-studio/plan.md` (aprobado)
 
-Estado de avance: 8 / 9 tareas completadas
+Estado de avance: 9 / 9 tareas completadas
 
 ---
 
@@ -105,7 +105,7 @@ Estado de avance: 8 / 9 tareas completadas
 
 ---
 
-- [ ] **T9. Suite de tests unitarios del core y el store.** RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-10, RF-11, RF-13
+- [x] **T9. Suite de tests unitarios del core y el store.** RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-10, RF-11, RF-13
   - Crear `src/hama/core/__tests__/grid-calculator.test.ts` con los 10 casos de prueba del plan:
     - Midi 8 cm → 16 perlas.
     - Mini 4 cm → 16 perlas.
