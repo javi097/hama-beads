@@ -2,7 +2,7 @@
 
 Plan de referencia: `specs/001-core-and-2d-studio/plan.md` (aprobado)
 
-Estado de avance: 7 / 9 tareas completadas
+Estado de avance: 8 / 9 tareas completadas
 
 ---
 
@@ -90,7 +90,7 @@ Estado de avance: 7 / 9 tareas completadas
 
 ---
 
-- [ ] **T8. Layout, página principal y orquestación reactiva completa.** RF-1, RF-2, RF-3, RF-5, RF-6, RF-7, RF-9, RF-14, RNF-3, RNF-4
+- [x] **T8. Layout, página principal y orquestación reactiva completa.** RF-1, RF-2, RF-3, RF-5, RF-6, RF-7, RF-9, RF-14, RNF-3, RNF-4
   - Crear `src/hama/layouts/StudioLayout.tsx`: layout de dos columnas (7/12 visor, 5/12 panel) con colapso a columna única en pantallas `< lg`.
   - Crear `src/hama/pages/StudioPage.tsx`:
     - Al montar, si `store.imageSrc === null`, carga el preset "mushroom" vía `useImageLoader.loadPreset`.
