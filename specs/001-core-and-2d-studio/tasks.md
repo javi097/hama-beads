@@ -2,7 +2,7 @@
 
 Plan de referencia: `specs/001-core-and-2d-studio/plan.md` (aprobado)
 
-Estado de avance: 2 / 9 tareas completadas
+Estado de avance: 3 / 9 tareas completadas
 
 ---
 
@@ -27,7 +27,7 @@ Estado de avance: 2 / 9 tareas completadas
 
 ---
 
-- [ ] **T3. Core de procesamiento de imagen y exportación PNG.** RF-1, RF-5, RF-6, RF-7, RF-14
+- [x] **T3. Core de procesamiento de imagen y exportación PNG.** RF-1, RF-5, RF-6, RF-7, RF-14
   - Crear `src/hama/core/image-processor.ts` con la función asíncrona `processImage(imageSrc, cols, rows, activePalette, removeBg): Promise<GridData>` siguiendo el flujo del plan: crear canvas offscreen → escalar imagen → detectar fondo → iterar píxeles con `processPixel` → devolver `GridData`.
   - Usar `OffscreenCanvas` cuando esté disponible en el entorno, con fallback a `HTMLCanvasElement` para compatibilidad con Safari.
   - Crear `src/hama/core/png-exporter.ts` con la función `exportPatternPng(gridData, beadType, widthCm, heightCm): void` siguiendo el flujo del plan: canvas offscreen de fondo blanco → cabecera de metadatos → reglas numéricas → perlas con código → descarga via `<a>` temporal.
