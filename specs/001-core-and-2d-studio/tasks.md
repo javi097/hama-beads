@@ -2,7 +2,7 @@
 
 Plan de referencia: `specs/001-core-and-2d-studio/plan.md` (aprobado)
 
-Estado de avance: 5 / 9 tareas completadas
+Estado de avance: 6 / 9 tareas completadas
 
 ---
 
@@ -56,7 +56,7 @@ Estado de avance: 5 / 9 tareas completadas
 
 ---
 
-- [ ] **T6. Hook de renderizado y visor Canvas 2D interactivo.** RF-9, RF-10, RF-11, RNF-1, RNF-2
+- [x] **T6. Hook de renderizado y visor Canvas 2D interactivo.** RF-9, RF-10, RF-11, RNF-1, RNF-2
   - Crear `src/hama/hooks/useCanvasRenderer.ts` con la firma del plan. Debe:
     - Compensar DPR (`devicePixelRatio`): ajustar `canvas.width/height` y escalar el contexto antes de dibujar.
     - Calcular `cellSize = baseCellSize × zoom`, donde `baseCellSize = clamp(floor(560 / max(cols,rows)), 14, 34)`.
