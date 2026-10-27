@@ -2,7 +2,7 @@
 
 Plan de referencia: `specs/001-core-and-2d-studio/plan.md` (aprobado)
 
-Estado de avance: 4 / 9 tareas completadas
+Estado de avance: 5 / 9 tareas completadas
 
 ---
 
@@ -47,7 +47,7 @@ Estado de avance: 4 / 9 tareas completadas
 
 ---
 
-- [ ] **T5. Hook de carga de imagen y componentes de controles de configuración.** RF-1, RF-2, RF-3, RF-4
+- [x] **T5. Hook de carga de imagen y componentes de controles de configuración.** RF-1, RF-2, RF-3, RF-4
   - Crear `src/hama/hooks/useImageLoader.ts` con la firma del plan: expone `loadFile(file: File)`, `loadPreset(type)` y `error: string | null`; internamente lee el archivo con `FileReader`, obtiene el ratio natural de la imagen y llama a `store.setImageSrc`.
   - Crear `src/hama/components/Controls/ImageDropzone.tsx`: zona drag-and-drop con `<input type="file">` oculto, miniatura de la imagen activa con `image-rendering: pixelated`, botones de tres presets y mensaje de error inline (no `alert()`) para formatos no soportados.
   - Crear `src/hama/components/Controls/BeadTypeSelector.tsx`: selector de tres opciones tipadas que llama a `store.setBeadTypeId` al cambiar.
