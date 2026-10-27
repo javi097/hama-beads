@@ -1,0 +1,1568 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HamaStudio 2D & 3D - Generador Profesional de Patrones</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              brand: { 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' }
+            }
+          }
+        }
+      }
+    </script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel para JSX en navegador -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+      /* Estilos de impresión para exportar la guía completa en PDF */
+      @media print {
+        body {
+          background: white !important;
+          color: black !important;
+        }
+
+        .no-print {
+          display: none !important;
+        }
+
+        .print-only {
+          display: block !important;
+        }
+
+        .print-break {
+          page-break-before: always;
+        }
+      }
+
+      /* Scrollbars elegantes */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: rgba(156, 163, 175, 0.4);
+        border-radius: 4px;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(156, 163, 175, 0.7);
+      }
+    </style>
+  </head>
+
+  <body
+    class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen transition-colors duration-200 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+      // ==========================================
+      // 1. DATASET OFICIAL DE COLORES HAMA BEADS
+      // ==========================================
+      const RAW_HAMA_PALETTE = [
+        { id: "01", name: "Blanco (White)", hex: "#FFFFFF" },
+        { id: "02", name: "Crema (Cream)", hex: "#F3E5AB" },
+        { id: "03", name: "Amarillo (Yellow)", hex: "#F7D000" },
+        { id: "04", name: "Naranja (Orange)", hex: "#E85D04" },
+        { id: "05", name: "Rojo (Red)", hex: "#D90429" },
+        { id: "06", name: "Rosa (Pink)", hex: "#F472B6" },
+        { id: "07", name: "Morado (Purple)", hex: "#7209B7" },
+        { id: "08", name: "Azul (Blue)", hex: "#1D4ED8" },
+        { id: "09", name: "Azul Claro (Light Blue)", hex: "#38BDF8" },
+        { id: "10", name: "Verde (Green)", hex: "#15803D" },
+        { id: "11", name: "Verde Claro (Light Green)", hex: "#4ADE80" },
+        { id: "12", name: "Marrón (Brown)", hex: "#5C3D2E" },
+        { id: "17", name: "Gris (Grey)", hex: "#94A3B8" },
+        { id: "18", name: "Negro (Black)", hex: "#111827" },
+        { id: "20", name: "Marrón Rojizo (Reddish Brown)", hex: "#8B4513" },
+        { id: "21", name: "Marrón Claro (Light Brown)", hex: "#C49A6C" },
+        { id: "22", name: "Rojo Oscuro (Dark Red)", hex: "#800020" },
+        { id: "26", name: "Piel / Carne (Flesh)", hex: "#FFDBAC" },
+        { id: "27", name: "Beige (Beige)", hex: "#E3C29B" },
+        { id: "28", name: "Verde Oliva (Olive Green)", hex: "#556B2F" },
+        { id: "29", name: "Rojo Vino (Wine Red)", hex: "#581845" },
+        { id: "30", name: "Burdeos (Burgundy)", hex: "#4A0E17" },
+        { id: "43", name: "Amarillo Pastel (Pastel Yellow)", hex: "#FEF08A" },
+        { id: "44", name: "Rojo Pastel (Pastel Red)", hex: "#FCA5A5" },
+        { id: "45", name: "Morado Pastel (Pastel Purple)", hex: "#DDD6FE" },
+        { id: "46", name: "Azul Pastel (Pastel Blue)", hex: "#BAE6FD" },
+        { id: "47", name: "Verde Pastel (Pastel Green)", hex: "#BBF7D0" },
+        { id: "48", name: "Rosa Pastel (Pastel Pink)", hex: "#FBCFE8" },
+        { id: "70", name: "Gris Claro (Light Grey)", hex: "#CBD5E1" },
+        { id: "71", name: "Gris Oscuro (Dark Grey)", hex: "#475569" }
+      ];
+
+      // Pre-calculamos valores RGB y luminancia de cada color de la paleta
+      const HAMA_PALETTE = RAW_HAMA_PALETTE.map(c => {
+        const hex = c.hex.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        return { ...c, r, g, b, lum };
+      });
+
+      const BEAD_TYPES = {
+        mini: { id: 'mini', name: 'Hama Mini (2.5 mm)', diameterMm: 2.5, pegboardSize: 28 },
+        midi: { id: 'midi', name: 'Hama Midi (5.0 mm)', diameterMm: 5.0, pegboardSize: 29 },
+        maxi: { id: 'maxi', name: 'Hama Maxi (10.0 mm)', diameterMm: 10.0, pegboardSize: 15 }
+      };
+
+      // ==========================================
+      // 2. UTILIDADES MATEMÁTICAS Y DE COLOR
+      // ==========================================
+      function findClosestHamaColor(r, g, b, activePalette) {
+        let minDistance = Infinity;
+        let closest = activePalette[0] || HAMA_PALETTE[0];
+
+        for (let i = 0; i < activePalette.length; i++) {
+          const c = activePalette[i];
+          const rmean = (r + c.r) / 2;
+          const dr = r - c.r;
+          const dg = g - c.g;
+          const db = b - c.b;
+          // Fórmula Redmean ponderada perceptualmente
+          const distance = Math.sqrt(
+            (2 + rmean / 256) * dr * dr +
+            4 * dg * dg +
+            (2 + (255 - rmean) / 256) * db * db
+          );
+          if (distance < minDistance) {
+            minDistance = distance;
+            closest = c;
+          }
+        }
+        return closest;
+      }
+
+      // Generador de imagen por defecto (Corazón / Champiñón estilo Pixel Art)
+      function createPresetDataUrl(type = 'mushroom') {
+        const canvas = document.createElement('canvas');
+        canvas.width = 16;
+        canvas.height = 16;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, 16, 16);
+
+        const palettes = {
+          mushroom: {
+            'K': '#111827', 'R': '#D90429', 'W': '#FFFFFF', 'S': '#FFDBAC', 'Y': '#F7D000'
+          },
+          heart: {
+            'K': '#111827', 'R': '#D90429', 'P': '#FCA5A5', 'W': '#FFFFFF', 'D': '#800020'
+          },
+          duck: {
+            'K': '#111827', 'Y': '#F7D000', 'L': '#FEF08A', 'O': '#E85D04', 'W': '#FFFFFF', 'B': '#38BDF8'
+          }
+        };
+
+        const grids = {
+          mushroom: [
+            ".....KKKKKK.....",
+            "...KKRRRRRRKK...",
+            "..KRRWWWRRRRWWK.",
+            ".KRRWWWWWRRRWWWK",
+            ".KRRWWWWWRRRRRRK",
+            "KRRRRWWWRRRRRRRK",
+            "KRRRRRRRRRRWWWRK",
+            "KWWWRRRRRRWWWWWK",
+            "KWWWRRRRRRWWWWWK",
+            ".KKKKKKKKKKKKKK.",
+            "...KSSSSSSSSK...",
+            "..KSSKSSSSKSSK..",
+            "..KSSKSSSSKSSK..",
+            "..KSSSSSSSSSSK..",
+            "...KSSSSSSSSK...",
+            "....KKKKKKKK...."
+          ],
+          heart: [
+            "................",
+            "..KKKK....KKKK..",
+            ".KRRRRK..KRRRRK.",
+            "KRWWWRRKKRRRRRRK",
+            "KRWWRRRRRRRRRRDK",
+            "KRRRRRRRRRRRRDDK",
+            "KRRRRRRRRRRRRDDK",
+            ".KRRRRRRRRRRDDK.",
+            "..KRRRRRRRRDDK..",
+            "...KRRRRRRDDK...",
+            "....KRRRRDDK....",
+            ".....KRRDDK.....",
+            "......KDDK......",
+            ".......KK.......",
+            "................",
+            "................"
+          ],
+          duck: [
+            ".....KKKKKK.....",
+            "...KKYYYYYYKK...",
+            "..KYYLLLLYYYYK..",
+            "..KYLLYYYYKWWYK.",
+            "..KYYYYYYYKKWYK.",
+            "..KYYYYYYYYYYYK.",
+            "KKKKOYYYYYYYYK..",
+            "KOOOOOYYYYYYK...",
+            ".KKKKKYYYYYYKKKK",
+            "....KYYYYYYYYYYK",
+            "...KYYLLLLYYYYYK",
+            "...KYYLLLLLLYYYK",
+            "...KYYYYYYYYYYK.",
+            "..BBBBBBBBBBBBBB",
+            ".BBBBBBBBBBBBBBB",
+            "................"
+          ]
+        };
+
+        const map = palettes[type];
+        const grid = grids[type];
+        grid.forEach((row, y) => {
+          for (let x = 0; x < 16; x++) {
+            const char = row[x];
+            if (char !== '.' && map[char]) {
+              ctx.fillStyle = map[char];
+              ctx.fillRect(x, y, 1, 1);
+            }
+          }
+        });
+        return canvas.toDataURL('image/png');
+      }
+
+      // ==========================================
+      // 3. COMPONENTE VISOR 3D (THREE.JS)
+      // ==========================================
+      function Viewer3D({ gridData, totalLayers, mode3D, layerGap, activeLayerFilter }) {
+        const mountRef = useRef(null);
+        const sceneRef = useRef(null);
+        const rendererRef = useRef(null);
+        const cameraRef = useRef(null);
+        const controlsRef = useRef(null);
+        const meshGroupRef = useRef(null);
+
+        // Inicializar escena Three.js
+        useEffect(() => {
+          const container = mountRef.current;
+          if (!container) return;
+
+          const width = container.clientWidth || 600;
+          const height = container.clientHeight || 500;
+
+          const scene = new THREE.Scene();
+          scene.background = new THREE.Color('#0f172a');
+          sceneRef.current = scene;
+
+          const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2000);
+          camera.position.set(0, -35, 35);
+          cameraRef.current = camera;
+
+          const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+          renderer.setSize(width, height);
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+          renderer.shadowMap.enabled = true;
+          container.innerHTML = '';
+          container.appendChild(renderer.domElement);
+          rendererRef.current = renderer;
+
+          const controls = new THREE.OrbitControls(camera, renderer.domElement);
+          controls.enableDamping = true;
+          controls.dampingFactor = 0.08;
+          controlsRef.current = controls;
+
+          // Iluminación estudio
+          const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+          scene.add(ambientLight);
+
+          const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.85);
+          dirLight1.position.set(30, -40, 50);
+          scene.add(dirLight1);
+
+          const dirLight2 = new THREE.DirectionalLight(0x93c5fd, 0.35);
+          dirLight2.position.set(-30, 40, -20);
+          scene.add(dirLight2);
+
+          // Base de referencia
+          const gridHelper = new THREE.GridHelper(60, 60, 0x334155, 0x1e293b);
+          gridHelper.rotation.x = Math.PI / 2;
+          gridHelper.position.z = -0.6;
+          scene.add(gridHelper);
+
+          const meshGroup = new THREE.Group();
+          scene.add(meshGroup);
+          meshGroupRef.current = meshGroup;
+
+          let reqId;
+          const animate = () => {
+            reqId = requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+          };
+          animate();
+
+          const handleResize = () => {
+            if (!container || !rendererRef.current || !cameraRef.current) return;
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            cameraRef.current.aspect = w / h;
+            cameraRef.current.updateProjectionMatrix();
+            rendererRef.current.setSize(w, h);
+          };
+          window.addEventListener('resize', handleResize);
+
+          return () => {
+            cancelAnimationFrame(reqId);
+            window.removeEventListener('resize', handleResize);
+            renderer.dispose();
+          };
+        }, []);
+
+        // Actualizar geometría de cuentas cuando cambian los datos
+        useEffect(() => {
+          const group = meshGroupRef.current;
+          if (!group || !gridData) return;
+
+          // Limpiar mallas previas
+          while (group.children.length > 0) {
+            const child = group.children[0];
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+            group.remove(child);
+          }
+
+          const { width, height, cells, layersData } = gridData;
+          if (!cells || cells.length === 0) return;
+
+          // Recolectar todos los vóxeles (cuentas 3D) a renderizar
+          const instances = [];
+          layersData.forEach((layerObj, lIdx) => {
+            const layerNum = lIdx + 1;
+            if (activeLayerFilter !== 'all' && activeLayerFilter !== layerNum) return;
+
+            const zPos = lIdx * (0.85 + layerGap);
+            layerObj.beads.forEach(b => {
+              instances.push({
+                x: b.x - width / 2 + 0.5,
+                y: (height - 1 - b.y) - height / 2 + 0.5,
+                z: zPos,
+                colorHex: b.color.hex
+              });
+            });
+          });
+
+          if (instances.length === 0) return;
+
+          // Geometría de una cuenta Hama (Cilindro exterior + Tapa oscura central para simular el agujero)
+          const outerGeo = new THREE.CylinderGeometry(0.47, 0.47, 0.8, 18);
+          outerGeo.rotateX(Math.PI / 2);
+          const outerMat = new THREE.MeshStandardMaterial({
+            roughness: 0.35,
+            metalness: 0.05
+          });
+
+          const holeGeo = new THREE.CylinderGeometry(0.20, 0.20, 0.84, 12);
+          holeGeo.rotateX(Math.PI / 2);
+          const holeMat = new THREE.MeshBasicMaterial({ color: 0x090d16 });
+
+          const instancedOuter = new THREE.InstancedMesh(outerGeo, outerMat, instances.length);
+          const instancedHole = new THREE.InstancedMesh(holeGeo, holeMat, instances.length);
+
+          const dummy = new THREE.Object3D();
+          const color = new THREE.Color();
+
+          for (let i = 0; i < instances.length; i++) {
+            const item = instances[i];
+            dummy.position.set(item.x, item.y, item.z);
+            dummy.updateMatrix();
+            instancedOuter.setMatrixAt(i, dummy.matrix);
+            instancedHole.setMatrixAt(i, dummy.matrix);
+
+            color.set(item.colorHex);
+            instancedOuter.setColorAt(i, color);
+          }
+
+          instancedOuter.instanceMatrix.needsUpdate = true;
+          if (instancedOuter.instanceColor) instancedOuter.instanceColor.needsUpdate = true;
+          instancedHole.instanceMatrix.needsUpdate = true;
+
+          group.add(instancedOuter);
+          group.add(instancedHole);
+
+        }, [gridData, totalLayers, mode3D, layerGap, activeLayerFilter]);
+
+        const resetCamera = () => {
+          if (!cameraRef.current || !controlsRef.current || !gridData) return;
+          const maxDim = Math.max(gridData.width, gridData.height, totalLayers * 2);
+          cameraRef.current.position.set(0, -maxDim * 1.2, maxDim * 1.1);
+          controlsRef.current.target.set(0, 0, (totalLayers * (0.85 + layerGap)) / 2);
+          controlsRef.current.update();
+        };
+
+        return (
+          <div className="relative w-full h-[540px] bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-inner">
+            <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+
+            {/* Controles flotantes del visor 3D */}
+            <div className="absolute top-3 left-3 bg-slate-900/85 backdrop-blur-md border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 space-y-1 pointer-events-none">
+              <div className="font-semibold text-indigo-400 flex items-center gap-1.5">
+                <span>Cubo 3D Interactivo</span>
+              </div>
+              <div>• Click Izq + Arrastrar: Rotar 360°</div>
+              <div>• Rueda del ratón: Zoom</div>
+              <div>• Click Der + Arrastrar: Mover (Pan)</div>
+            </div>
+
+            <button
+              onClick={resetCamera}
+              className="absolute bottom-3 right-3 bg-slate-800/90 hover:bg-indigo-600 text-white text-xs font-medium px-3 py-2 rounded-lg border border-slate-600 shadow transition"
+            >
+              Centrar Cámara
+            </button>
+          </div>
+        );
+      }
+
+      // ==========================================
+      // 4. APLICACIÓN PRINCIPAL
+      // ==========================================
+      function App() {
+        // Estado de Configuración
+        const [darkMode, setDarkMode] = useState(true);
+        const [imageSrc, setImageSrc] = useState(() => createPresetDataUrl('mushroom'));
+        const [imgNaturalSize, setImgNaturalSize] = useState({ width: 16, height: 16 });
+
+        // Dimensiones físicas y perlas
+        const [beadTypeKey, setBeadTypeKey] = useState('midi');
+        const [widthCm, setWidthCm] = useState(8); // 8 cm en Midi = 16 beads
+        const [heightCm, setHeightCm] = useState(8);
+        const [lockAspect, setLockAspect] = useState(true);
+        const [removeBg, setRemoveBg] = useState(true);
+
+        // Paleta activa (permite activar/desactivar colores específicos)
+        const [enabledColorIds, setEnabledColorIds] = useState(() => HAMA_PALETTE.map(c => c.id));
+        const [showPaletteModal, setShowPaletteModal] = useState(false);
+
+        // Vista 2D vs 3D
+        const [viewMode, setViewMode] = useState('2d'); // '2d' | '3d'
+
+        // Opciones 2D
+        const [zoom2D, setZoom2D] = useState(1);
+        const [showGrid, setShowGrid] = useState(true);
+        const [showCodes, setShowCodes] = useState(false);
+        const [beadShape, setBeadShape] = useState('hollow'); // 'hollow' | 'pixel'
+        const [highlightedColorId, setHighlightedColorId] = useState(null);
+
+        // Opciones 3D
+        const [totalLayers3D, setTotalLayers3D] = useState(5);
+        const [mode3DType, setMode3DType] = useState('relief'); // 'relief' | 'extrude' | 'stand'
+        const [layerGap, setLayerGap] = useState(0.35);
+        const [activeLayerFilter, setActiveLayerFilter] = useState('all'); // 'all' | 1..N
+
+        const canvas2DRef = useRef(null);
+        const fileInputRef = useRef(null);
+
+        // Sincronizar clase dark en HTML
+        useEffect(() => {
+          const root = document.documentElement;
+          if (darkMode) root.classList.add('dark');
+          else root.classList.remove('dark');
+        }, [darkMode]);
+
+        const currentBeadSpec = BEAD_TYPES[beadTypeKey];
+        const diameterCm = currentBeadSpec.diameterMm / 10;
+
+        // Manejo de cambio de ancho/alto en cm manteniendo proporción
+        const handleWidthCmChange = (newW) => {
+          const val = Math.max(1, Math.min(100, Number(newW) || 1));
+          setWidthCm(val);
+          if (lockAspect && imgNaturalSize.width > 0) {
+            const ratio = imgNaturalSize.height / imgNaturalSize.width;
+            setHeightCm(Number((val * ratio).toFixed(1)));
+          }
+        };
+
+        const handleHeightCmChange = (newH) => {
+          const val = Math.max(1, Math.min(100, Number(newH) || 1));
+          setHeightCm(val);
+          if (lockAspect && imgNaturalSize.height > 0) {
+            const ratio = imgNaturalSize.width / imgNaturalSize.height;
+            setWidthCm(Number((val * ratio).toFixed(1)));
+          }
+        };
+
+        // Cargar imagen desde archivo o preset
+        const handleImageLoad = (dataUrl) => {
+          const img = new Image();
+          img.onload = () => {
+            setImgNaturalSize({ width: img.width, height: img.height });
+            if (lockAspect) {
+              const ratio = img.height / img.width;
+              setHeightCm(Number((widthCm * ratio).toFixed(1)));
+            }
+            setImageSrc(dataUrl);
+          };
+          img.src = dataUrl;
+        };
+
+        const onFileUpload = (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => handleImageLoad(ev.target.result);
+          reader.readAsDataURL(file);
+        };
+
+        const onDrop = (e) => {
+          e.preventDefault();
+          const file = e.dataTransfer.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => handleImageLoad(ev.target.result);
+          reader.readAsDataURL(file);
+        };
+
+        // ==========================================
+        // PROCESAMIENTO CENTRAL DE IMAGEN Y CAPAS 3D
+        // ==========================================
+        const [gridData, setGridData] = useState(null);
+
+        useEffect(() => {
+          if (!imageSrc) return;
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+            const cols = Math.max(2, Math.round(widthCm / diameterCm));
+            const rows = Math.max(2, Math.round(heightCm / diameterCm));
+
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = cols;
+            offCanvas.height = rows;
+            const ctx = offCanvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, 0, 0, cols, rows);
+
+            const imgData = ctx.getImageData(0, 0, cols, rows).data;
+            const activePalette = HAMA_PALETTE.filter(c => enabledColorIds.includes(c.id));
+            const safePalette = activePalette.length > 0 ? activePalette : HAMA_PALETTE;
+
+            // Detectar color de fondo en la esquina (0,0) por si la imagen es un JPG con fondo uniforme
+            const cornerR = imgData[0], cornerG = imgData[1], cornerB = imgData[2], cornerA = imgData[3];
+
+            const cells = [];
+            const mask = Array.from({ length: rows }, () => Array(cols).fill(false));
+
+            for (let y = 0; y < rows; y++) {
+              const rowCells = [];
+              for (let x = 0; x < cols; x++) {
+                const idx = (y * cols + x) * 4;
+                const r = imgData[idx];
+                const g = imgData[idx + 1];
+                const b = imgData[idx + 2];
+                const a = imgData[idx + 3];
+
+                let isTransparent = a < 120;
+                if (!isTransparent && removeBg && cornerA > 200) {
+                  const distCorner = Math.hypot(r - cornerR, g - cornerG, b - cornerB);
+                  // Si tiene fondo blanco puro en las esquinas y removeBg está activo
+                  if (cornerR > 245 && cornerG > 245 && cornerB > 245 && distCorner < 18 && (x === 0 || y === 0 || x === cols - 1 || y === rows - 1)) {
+                    isTransparent = true;
+                  }
+                }
+
+                if (isTransparent) {
+                  rowCells.push(null);
+                } else {
+                  const matchedColor = findClosestHamaColor(r, g, b, safePalette);
+                  rowCells.push(matchedColor);
+                  mask[y][x] = true;
+                }
+              }
+              cells.push(rowCells);
+            }
+
+            // Calcular mapa de distancia al borde para el relieve 3D piramidal
+            const distMap = Array.from({ length: rows }, () => Array(cols).fill(0));
+            for (let y = 0; y < rows; y++) {
+              for (let x = 0; x < cols; x++) {
+                if (!mask[y][x]) continue;
+                let minEdgeDist = Math.min(x + 1, y + 1, cols - x, rows - y);
+                for (let dy = -3; dy <= 3; dy++) {
+                  for (let dx = -3; dx <= 3; dx++) {
+                    const ny = y + dy, nx = x + dx;
+                    if (ny < 0 || ny >= rows || nx < 0 || nx >= cols || !mask[ny][nx]) {
+                      minEdgeDist = Math.min(minEdgeDist, Math.hypot(dx, dy));
+                    }
+                  }
+                }
+                distMap[y][x] = minEdgeDist;
+              }
+            }
+
+            // Generar estructura de capas 3D
+            const layersData = [];
+            for (let l = 1; l <= totalLayers3D; l++) {
+              const layerBeads = [];
+              for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                  const color = cells[y][x];
+                  if (!color) continue;
+
+                  let includeInLayer = false;
+                  if (mode3DType === 'extrude') {
+                    // Extrusión completa de la silueta en todas las capas
+                    includeInLayer = true;
+                  } else if (mode3DType === 'relief') {
+                    // Relieve volumétrico: la capa base (1 y 2) tiene toda la silueta para firmeza;
+                    // las capas superiores sobresalen según luminancia y distancia al borde.
+                    const lumFactor = Math.round(color.lum * (totalLayers3D - 1));
+                    const edgeFactor = Math.min(totalLayers3D, Math.ceil(distMap[y][x] * 1.4));
+                    const targetHeight = Math.max(2, Math.min(totalLayers3D, Math.round((lumFactor + edgeFactor) / 1.5)));
+                    includeInLayer = l <= targetHeight;
+                  } else if (mode3DType === 'stand') {
+                    // Figura con peana ensamblable (Capas centrales completas + bordes de sujeción)
+                    const centerLayer = Math.ceil(totalLayers3D / 2);
+                    if (l === centerLayer || l === centerLayer - 1) {
+                      includeInLayer = true;
+                    } else {
+                      // Capas exteriores actúan como refuerzo de la mitad inferior (peana/soporte)
+                      includeInLayer = y >= Math.floor(rows * 0.55);
+                    }
+                  }
+
+                  if (includeInLayer) {
+                    layerBeads.push({ x, y, color });
+                  }
+                }
+              }
+              layersData.push({ layerNumber: l, beads: layerBeads });
+            }
+
+            // Conteo de materiales para 2D y 3D
+            const counts2D = {};
+            for (let y = 0; y < rows; y++) {
+              for (let x = 0; x < cols; x++) {
+                const c = cells[y][x];
+                if (c) counts2D[c.id] = (counts2D[c.id] || 0) + 1;
+              }
+            }
+
+            const counts3D = {};
+            layersData.forEach(layer => {
+              layer.beads.forEach(b => {
+                counts3D[b.color.id] = (counts3D[b.color.id] || 0) + 1;
+              });
+            });
+
+            setGridData({
+              width: cols,
+              height: rows,
+              cells,
+              layersData,
+              counts2D,
+              counts3D
+            });
+          };
+          img.src = imageSrc;
+        }, [imageSrc, widthCm, heightCm, diameterCm, enabledColorIds, removeBg, totalLayers3D, mode3DType]);
+
+        // ==========================================
+        // RENDERIZADO DEL CANVAS 2D INTERACTIVO
+        // ==========================================
+        useEffect(() => {
+          const canvas = canvas2DRef.current;
+          if (!canvas || !gridData || viewMode !== '2d') return;
+
+          const { width, height, cells } = gridData;
+          const baseCellSize = Math.max(14, Math.min(34, Math.floor(560 / Math.max(width, height))));
+          const cellSize = Math.round(baseCellSize * zoom2D);
+          const rulerOffset = 26;
+
+          canvas.width = width * cellSize + rulerOffset;
+          canvas.height = height * cellSize + rulerOffset;
+
+          const ctx = canvas.getContext('2d');
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // Fondo de reglas superior e izquierda
+          ctx.fillStyle = darkMode ? '#1e293b' : '#e2e8f0';
+          ctx.fillRect(0, 0, canvas.width, rulerOffset);
+          ctx.fillRect(0, 0, rulerOffset, canvas.height);
+
+          ctx.fillStyle = darkMode ? '#94a3b8' : '#475569';
+          ctx.font = 'bold 10px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          // Numeración de columnas y filas
+          for (let x = 0; x < width; x++) {
+            if (cellSize >= 16 || (x + 1) % 5 === 0 || x === 0) {
+              ctx.fillText(x + 1, rulerOffset + x * cellSize + cellSize / 2, rulerOffset / 2);
+            }
+          }
+          for (let y = 0; y < height; y++) {
+            if (cellSize >= 16 || (y + 1) % 5 === 0 || y === 0) {
+              ctx.fillText(y + 1, rulerOffset / 2, rulerOffset + y * cellSize + cellSize / 2);
+            }
+          }
+
+          // Dibujar celdas y cuentas
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const px = rulerOffset + x * cellSize;
+              const py = rulerOffset + y * cellSize;
+              const color = cells[y][x];
+
+              // Fondo ajedrezado sutil para celdas vacías (clavijas de placa)
+              ctx.fillStyle = (x + y) % 2 === 0
+                ? (darkMode ? '#0f172a' : '#f8fafc')
+                : (darkMode ? '#131c31' : '#f1f5f9');
+              ctx.fillRect(px, py, cellSize, cellSize);
+
+              // Clavija central de la placa
+              ctx.fillStyle = darkMode ? '#334155' : '#cbd5e1';
+              ctx.beginPath();
+              ctx.arc(px + cellSize / 2, py + cellSize / 2, Math.max(1.5, cellSize * 0.08), 0, Math.PI * 2);
+              ctx.fill();
+
+              if (color) {
+                const isDimmed = highlightedColorId && highlightedColorId !== color.id;
+                ctx.save();
+                if (isDimmed) ctx.globalAlpha = 0.18;
+
+                const cx = px + cellSize / 2;
+                const cy = py + cellSize / 2;
+
+                if (beadShape === 'hollow') {
+                  // Dibujar perla cilíndrica con hueco interior
+                  const outerRadius = cellSize * 0.45;
+                  const innerRadius = cellSize * 0.18;
+
+                  ctx.beginPath();
+                  ctx.arc(cx, cy, outerRadius, 0, Math.PI * 2);
+                  ctx.fillStyle = color.hex;
+                  ctx.fill();
+                  ctx.lineWidth = Math.max(1, cellSize * 0.04);
+                  ctx.strokeStyle = 'rgba(0,0,0,0.28)';
+                  ctx.stroke();
+
+                  // Agujero central
+                  ctx.beginPath();
+                  ctx.arc(cx, cy, innerRadius, 0, Math.PI * 2);
+                  ctx.fillStyle = darkMode ? '#0f172a' : '#e2e8f0';
+                  ctx.fill();
+                } else {
+                  // Cuadrado sólido (Pixel Art)
+                  ctx.fillStyle = color.hex;
+                  ctx.fillRect(px + 1, py + 1, cellSize - 2, cellSize - 2);
+                }
+
+                // Mostrar código oficial Hama dentro de la cuenta
+                if (showCodes && cellSize >= 18) {
+                  ctx.fillStyle = color.lum > 0.55 ? '#0f172a' : '#ffffff';
+                  ctx.font = `bold ${Math.max(9, Math.floor(cellSize * 0.34))}px monospace`;
+                  ctx.fillText(color.id, cx, cy);
+                }
+
+                ctx.restore();
+              }
+            }
+          }
+
+          // Cuadrícula (Grid) y divisiones de placas estándar (ej. cada 29x29 en Midi)
+          if (showGrid) {
+            const pegSize = currentBeadSpec.pegboardSize;
+            for (let x = 0; x <= width; x++) {
+              const px = rulerOffset + x * cellSize;
+              ctx.beginPath();
+              ctx.moveTo(px, rulerOffset);
+              ctx.lineTo(px, canvas.height);
+              const isPegBorder = x > 0 && x % pegSize === 0;
+              ctx.strokeStyle = isPegBorder ? '#ef4444' : (darkMode ? 'rgba(148,163,184,0.22)' : 'rgba(71,85,105,0.22)');
+              ctx.lineWidth = isPegBorder ? 2 : 1;
+              ctx.stroke();
+            }
+            for (let y = 0; y <= height; y++) {
+              const py = rulerOffset + y * cellSize;
+              ctx.beginPath();
+              ctx.moveTo(rulerOffset, py);
+              ctx.lineTo(canvas.width, py);
+              const isPegBorder = y > 0 && y % pegSize === 0;
+              ctx.strokeStyle = isPegBorder ? '#ef4444' : (darkMode ? 'rgba(148,163,184,0.22)' : 'rgba(71,85,105,0.22)');
+              ctx.lineWidth = isPegBorder ? 2 : 1;
+              ctx.stroke();
+            }
+          }
+        }, [gridData, viewMode, zoom2D, showGrid, showCodes, beadShape, darkMode, highlightedColorId, currentBeadSpec]);
+
+        // ==========================================
+        // EXPORTAR IMAGEN NUMERADA EN ALTA RESOLUCIÓN
+        // ==========================================
+        const exportHighResPattern = () => {
+          if (!gridData) return;
+          const { width, height, cells } = gridData;
+          const cellSize = 32;
+          const rulerOffset = 36;
+          const headerHeight = 80;
+
+          const outCanvas = document.createElement('canvas');
+          outCanvas.width = Math.max(600, width * cellSize + rulerOffset + 40);
+          outCanvas.height = height * cellSize + rulerOffset + headerHeight + 40;
+          const ctx = outCanvas.getContext('2d');
+
+          // Fondo blanco limpio para impresión
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
+
+          // Encabezado del documento
+          ctx.fillStyle = '#0f172a';
+          ctx.font = 'bold 22px sans-serif';
+          ctx.fillText(`Patrón HamaStudio (${currentBeadSpec.name})`, 20, 35);
+          ctx.font = '14px sans-serif';
+          ctx.fillStyle = '#475569';
+          ctx.fillText(
+            `Dimensiones: ${widthCm} cm x ${heightCm} cm | Cuadrícula: ${width} x ${height} cuentas`,
+            20, 60
+          );
+
+          const startX = 20 + rulerOffset;
+          const startY = headerHeight + rulerOffset;
+
+          // Números de guía
+          ctx.fillStyle = '#334155';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          for (let x = 0; x < width; x++) {
+            ctx.fillText(x + 1, startX + x * cellSize + cellSize / 2, headerHeight + rulerOffset / 2);
+          }
+          for (let y = 0; y < height; y++) {
+            ctx.fillText(y + 1, 20 + rulerOffset / 2, startY + y * cellSize + cellSize / 2);
+          }
+
+          // Cuentas con su código oficial impreso
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const px = startX + x * cellSize;
+              const py = startY + y * cellSize;
+              const c = cells[y][x];
+
+              ctx.strokeStyle = '#cbd5e1';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(px, py, cellSize, cellSize);
+
+              if (c) {
+                ctx.fillStyle = c.hex;
+                ctx.beginPath();
+                ctx.arc(px + cellSize / 2, py + cellSize / 2, cellSize * 0.44, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#64748b';
+                ctx.stroke();
+
+                ctx.fillStyle = c.lum > 0.55 ? '#000000' : '#ffffff';
+                ctx.font = 'bold 11px monospace';
+                ctx.fillText(c.id, px + cellSize / 2, py + cellSize / 2);
+              }
+            }
+          }
+
+          const link = document.createElement('a');
+          link.download = `Patron_Hama_${width}x${height}_${widthCm}cm.png`;
+          link.href = outCanvas.toDataURL('image/png');
+          link.click();
+        };
+
+        // Lista de materiales ordenada por cantidad de cuentas
+        const materialList = useMemo(() => {
+          if (!gridData) return [];
+          const countsMap = viewMode === '2d' ? gridData.counts2D : gridData.counts3D;
+          return Object.entries(countsMap)
+            .map(([id, count]) => {
+              const colorInfo = HAMA_PALETTE.find(c => c.id === id);
+              return { ...colorInfo, count };
+            })
+            .sort((a, b) => b.count - a.count);
+        }, [gridData, viewMode]);
+
+        const totalBeadsCount = useMemo(() => {
+          return materialList.reduce((acc, item) => acc + item.count, 0);
+        }, [materialList]);
+
+        // Placas necesarias (ej. 29x29 para Midi)
+        const boardsNeeded = useMemo(() => {
+          if (!gridData) return { cols: 1, rows: 1, total: 1 };
+          const bSize = currentBeadSpec.pegboardSize;
+          const bCols = Math.ceil(gridData.width / bSize);
+          const bRows = Math.ceil(gridData.height / bSize);
+          return { cols: bCols, rows: bRows, total: bCols * bRows };
+        }, [gridData, currentBeadSpec]);
+
+        return (
+          <div className="min-h-screen flex flex-col">
+            {/* ========================================== */}
+            {/* BARRA SUPERIOR (HEADER)                    */}
+            {/* ========================================== */}
+            <header className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-md shadow-indigo-500/20">
+                  <div className="w-4 h-4 rounded-full border-4 border-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg font-extrabold tracking-tight flex items-center gap-2">
+                    HamaStudio <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">2D & 3D Voxel Engine</span>
+                  </h1>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Conversor exacto de imágenes a patrones de perlas termofusibles
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 no-print">
+                <button
+                  onClick={() => setShowPaletteModal(true)}
+                  className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 transition flex items-center gap-2"
+                >
+                  <span>🎨 Paleta Oficial ({enabledColorIds.length}/{HAMA_PALETTE.length})</span>
+                </button>
+
+                <button
+                  onClick={exportHighResPattern}
+                  className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition flex items-center gap-1.5"
+                >
+                  <span>⬇ Descargar Patrón Numerado (PNG)</span>
+                </button>
+
+                <button
+                  onClick={() => window.print()}
+                  className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition flex items-center gap-1.5"
+                >
+                  <span>🖨️ Imprimir / Guardar Guía PDF</span>
+                </button>
+
+                <button
+                  onClick={() => setDarkMode(!darkMode)}
+                  className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-sm"
+                  title="Cambiar tema Claro / Oscuro"
+                >
+                  {darkMode ? '☀️' : '🌙'}
+                </button>
+              </div>
+            </header>
+
+            {/* ========================================== */}
+            {/* PANEL DE CONFIGURACIÓN DE ENTRADA          */}
+            {/* ========================================== */}
+            <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-4 no-print">
+              <div className="max-w-[1600px] mx-auto grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+
+                {/* 1. Subida de Imagen + Presets */}
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={onDrop}
+                  className="md:col-span-4 flex items-center gap-3 p-2.5 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 bg-slate-50/50 dark:bg-slate-950/40 transition"
+                >
+                  <img
+                    src={imageSrc}
+                    alt="Preview"
+                    className="w-12 h-12 rounded-lg object-contain bg-slate-200 dark:bg-slate-800 p-1 border border-slate-300 dark:border-slate-700 shrink-0"
+                    style={{ imageRendering: 'pixelated' }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline truncate"
+                      >
+                        Subir imagen (PNG, JPG, SVG)
+                      </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                        onChange={onFileUpload}
+                        className="hidden"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                      O arrastra aquí · Prueba un modelo:
+                    </p>
+                    <div className="flex gap-1.5 mt-1">
+                      <button onClick={() => handleImageLoad(createPresetDataUrl('mushroom'))} className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-indigo-500 hover:text-white transition">🍄 Setita</button>
+                      <button onClick={() => handleImageLoad(createPresetDataUrl('heart'))} className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-indigo-500 hover:text-white transition">❤️ Corazón</button>
+                      <button onClick={() => handleImageLoad(createPresetDataUrl('duck'))} className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-indigo-500 hover:text-white transition">🦆 Patito</button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Selector de Tamaño en Centímetros (cm) */}
+                <div className="md:col-span-4 bg-slate-50 dark:bg-slate-950/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      Ancho (cm)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      max="100"
+                      value={widthCm}
+                      onChange={(e) => handleWidthCmChange(e.target.value)}
+                      className="mt-1 w-20 px-2.5 py-1.5 text-sm font-bold rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => setLockAspect(!lockAspect)}
+                    className={`mt-4 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition ${lockAspect
+                      ? 'bg-indigo-500/10 text-indigo-500 border-indigo-500/30'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-500 border-transparent'
+                      }`}
+                    title="Bloquear / Desbloquear proporción de aspecto"
+                  >
+                    {lockAspect ? '🔒 Proporción' : '🔓 Libre'}
+                  </button>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      Alto (cm)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      max="100"
+                      value={heightCm}
+                      onChange={(e) => handleHeightCmChange(e.target.value)}
+                      className="mt-1 w-20 px-2.5 py-1.5 text-sm font-bold rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Selector de Tipo de Perla + Resumen de Resolución */}
+                <div className="md:col-span-4 bg-slate-50 dark:bg-slate-950/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      Tipo de Perla (Diámetro)
+                    </label>
+                    <select
+                      value={beadTypeKey}
+                      onChange={(e) => setBeadTypeKey(e.target.value)}
+                      className="mt-1 w-full px-2.5 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {Object.values(BEAD_TYPES).map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="text-right pl-3 border-l border-slate-200 dark:border-slate-800">
+                    <span className="block text-[11px] text-slate-400 font-medium">Cuadrícula Calculada</span>
+                    <span className="text-base font-extrabold text-indigo-600 dark:text-indigo-400">
+                      {gridData ? `${gridData.width} × ${gridData.height}` : '--'} <span className="text-xs font-normal">beads</span>
+                    </span>
+                    <span className="block text-[10px] text-slate-500">
+                      ({widthCm}cm / {diameterCm}cm)
+                    </span>
+                  </div>
+                </div>
+
+              </div>
+            </section>
+
+            {/* ========================================== */}
+            {/* LAYOUT PRINCIPAL EN 2 COLUMNAS             */}
+            {/* ========================================== */}
+            <main className="flex-1 max-w-[1600px] w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+              {/* ========================================== */}
+              {/* COLUMNA IZQUIERDA: VISUALIZADOR 2D / 3D    */}
+              {/* ========================================== */}
+              <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+
+                {/* Barra de pestañas 2D vs 3D y herramientas de vista */}
+                <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-900/50">
+                  <div className="inline-flex p-1 rounded-xl bg-slate-200/80 dark:bg-slate-800 border border-slate-300 dark:border-slate-700">
+                    <button
+                      onClick={() => setViewMode('2d')}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${viewMode === '2d'
+                        ? 'bg-indigo-600 text-white shadow'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                    >
+                      📐 Vista 2D (Plano)
+                    </button>
+                    <button
+                      onClick={() => setViewMode('3d')}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${viewMode === '3d'
+                        ? 'bg-indigo-600 text-white shadow'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                    >
+                      🧊 Vista 3D (Figura Voxel)
+                    </button>
+                  </div>
+
+                  {/* Controles específicos según el modo activo */}
+                  {viewMode === '2d' ? (
+                    <div className="flex flex-wrap items-center gap-2 text-xs no-print">
+                      <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-700 px-2 py-1">
+                        <button onClick={() => setZoom2D(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} className="px-1.5 font-bold hover:text-indigo-500">−</button>
+                        <span className="px-2 font-mono text-[11px]">{Math.round(zoom2D * 100)}%</span>
+                        <button onClick={() => setZoom2D(z => Math.min(3, +(z + 0.25).toFixed(2)))} className="px-1.5 font-bold hover:text-indigo-500">+</button>
+                      </div>
+
+                      <button
+                        onClick={() => setShowGrid(!showGrid)}
+                        className={`px-2.5 py-1.5 rounded-lg font-medium border transition ${showGrid ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-500' : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700'
+                          }`}
+                      >
+                        # Cuadrícula
+                      </button>
+
+                      <button
+                        onClick={() => setShowCodes(!showCodes)}
+                        className={`px-2.5 py-1.5 rounded-lg font-medium border transition ${showCodes ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-500' : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700'
+                          }`}
+                      >
+                        🆔 Códigos
+                      </button>
+
+                      <button
+                        onClick={() => setBeadShape(beadShape === 'hollow' ? 'pixel' : 'hollow')}
+                        className="px-2.5 py-1.5 rounded-lg font-medium bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
+                      >
+                        {beadShape === 'hollow' ? '⭕ Perla' : '⬛ Píxel'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-3 text-xs no-print">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-slate-400 font-medium">Modo 3D:</span>
+                        <select
+                          value={mode3DType}
+                          onChange={(e) => setMode3DType(e.target.value)}
+                          className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-semibold"
+                        >
+                          <option value="relief">Relieve por Capas (Luminancia)</option>
+                          <option value="extrude">Extrusión Sólida Multicapa</option>
+                          <option value="stand">Figura con Peana / Ranura</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-slate-400 font-medium">Capas:</span>
+                        <input
+                          type="range"
+                          min="2"
+                          max="10"
+                          value={totalLayers3D}
+                          onChange={(e) => {
+                            setTotalLayers3D(Number(e.target.value));
+                            setActiveLayerFilter('all');
+                          }}
+                          className="w-20 accent-indigo-600"
+                        />
+                        <span className="font-bold text-indigo-500">{totalLayers3D}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-slate-400 font-medium">Separar:</span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="2"
+                          step="0.1"
+                          value={layerGap}
+                          onChange={(e) => setLayerGap(Number(e.target.value))}
+                          className="w-20 accent-indigo-600"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Cuerpo del Visualizador */}
+                <div className="p-4 flex-1 flex flex-col items-center justify-center bg-slate-100/70 dark:bg-slate-950/60 min-h-[540px] overflow-auto">
+                  {viewMode === '2d' ? (
+                    <div className="max-w-full overflow-auto p-2 rounded-xl bg-white dark:bg-slate-900 shadow-inner border border-slate-200 dark:border-slate-800">
+                      <canvas ref={canvas2DRef} className="block mx-auto" />
+                    </div>
+                  ) : (
+                    <div className="w-full space-y-3">
+                      {/* Selector rápido de inspección de capa en 3D */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-200/70 dark:bg-slate-900 p-2.5 rounded-xl border border-slate-300 dark:border-slate-800 text-xs">
+                        <span className="font-semibold text-slate-600 dark:text-slate-300">
+                          Inspeccionar Capa en el Visor 3D:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            onClick={() => setActiveLayerFilter('all')}
+                            className={`px-2.5 py-1 rounded-md font-bold transition ${activeLayerFilter === 'all'
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-white dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700'
+                              }`}
+                          >
+                            Todas ({totalLayers3D})
+                          </button>
+                          {Array.from({ length: totalLayers3D }, (_, i) => i + 1).map(layerNum => (
+                            <button
+                              key={layerNum}
+                              onClick={() => setActiveLayerFilter(layerNum)}
+                              className={`px-2.5 py-1 rounded-md font-bold transition ${activeLayerFilter === layerNum
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-white dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700'
+                                }`}
+                            >
+                              Capa {layerNum}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <Viewer3D
+                        gridData={gridData}
+                        totalLayers={totalLayers3D}
+                        mode3D={mode3DType}
+                        layerGap={layerGap}
+                        activeLayerFilter={activeLayerFilter}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Pie informativo del visor */}
+                <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <div>
+                    {viewMode === '2d'
+                      ? `Las líneas rojas indican el límite de placa estándar (${currentBeadSpec.pegboardSize}×${currentBeadSpec.pegboardSize} clavijas).`
+                      : `Grosor estimado de la figura ensamblada: ${(totalLayers3D * (currentBeadSpec.diameterMm * 0.85) / 10).toFixed(1)} cm.`}
+                  </div>
+                  {highlightedColorId && (
+                    <button
+                      onClick={() => setHighlightedColorId(null)}
+                      className="text-indigo-500 font-semibold hover:underline"
+                    >
+                      Mostrar todos los colores (Quitar filtro #{highlightedColorId})
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* ========================================== */}
+              {/* COLUMNA DERECHA: MATERIALES E INSTRUCCIONES*/}
+              {/* ========================================== */}
+              <div className="lg:col-span-5 space-y-6">
+
+                {/* Tarjeta 1: Lista de Materiales y Colores (BOM) */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
+                    <div>
+                      <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                        1. Lista de Materiales y Colores Hama
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Haz clic en un color para resaltarlo en el lienzo 2D
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs text-slate-400 block">Total Cuentas ({viewMode.toUpperCase()})</span>
+                      <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">
+                        {totalBeadsCount.toLocaleString()} uds.
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Resumen de placas y tiempo estimado */}
+                  <div className="grid grid-cols-3 divide-x divide-slate-200 dark:divide-slate-800 bg-slate-100/50 dark:bg-slate-950/40 border-b border-slate-200 dark:border-slate-800 text-center py-2.5 text-xs">
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Tamaño Final</span>
+                      <span className="font-bold">{widthCm} × {heightCm} cm</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Placas Base</span>
+                      <span className="font-bold">{boardsNeeded.total} ({boardsNeeded.cols}×{boardsNeeded.rows})</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Tiempo Estimado</span>
+                      <span className="font-bold">~{Math.max(5, Math.ceil(totalBeadsCount / 35))} min</span>
+                    </div>
+                  </div>
+
+                  {/* Tabla de colores exactos */}
+                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/70">
+                    {materialList.map(item => {
+                      const isSelected = highlightedColorId === item.id;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setHighlightedColorId(isSelected ? null : item.id)}
+                          className={`px-4 py-2.5 flex items-center justify-between text-xs cursor-pointer transition ${isSelected
+                            ? 'bg-indigo-500/15 dark:bg-indigo-500/20 font-semibold'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                            }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span
+                              className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 shadow-sm shrink-0 flex items-center justify-center text-[10px] font-mono font-bold"
+                              style={{
+                                backgroundColor: item.hex,
+                                color: item.lum > 0.55 ? '#0f172a' : '#ffffff'
+                              }}
+                            >
+                              {item.id}
+                            </span>
+                            <div>
+                              <div className="font-bold text-slate-800 dark:text-slate-100">
+                                #{item.id} - {item.name}
+                              </div>
+                              <div className="text-[11px] font-mono text-slate-400">
+                                HEX: {item.hex}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 font-extrabold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                              {item.count} beads
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Tarjeta 2: Guía de Montaje Dinámica (2D vs 3D) */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                    <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                      2. Guía de Montaje Paso a Paso ({viewMode === '2d' ? 'Modo 2D Plano' : 'Modo 3D Multicapa'})
+                    </h2>
+                  </div>
+
+                  {viewMode === '2d' ? (
+                    /* INSTRUCCIONES MODO 2D */
+                    <div className="p-4 space-y-4 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
+                        <h3 className="font-bold text-slate-900 dark:text-white mb-1">
+                          Paso 1: Preparación de Placas ({boardsNeeded.cols}×{boardsNeeded.rows})
+                        </h3>
+                        <p>
+                          Ensambla <strong>{boardsNeeded.total} placa(s)</strong> cuadrada(s) para {currentBeadSpec.name} ({currentBeadSpec.pegboardSize}×{currentBeadSpec.pegboardSize} clavijas). Activa el botón <strong>"🆔 Códigos"</strong> en el visor para ver exactamente qué número de color va en cada coordenada.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
+                        <h3 className="font-bold text-slate-900 dark:text-white mb-1">
+                          Paso 2: Colocación por Barrido o Color
+                        </h3>
+                        <p>
+                          Haz clic sobre cualquier color en la <strong>Lista de Materiales</strong> superior para iluminar únicamente las cuentas de ese código en la cuadrícula. Comienza por el contorno exterior negro/oscuro y luego rellena el interior.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-200">
+                        <h3 className="font-bold mb-1">
+                          Paso 3: Planchado y Termofusión Perfecta
+                        </h3>
+                        <ul className="list-disc list-inside space-y-1">
+                          <li><strong>Temperatura recomendada:</strong> {beadTypeKey === 'mini' ? '130°C - 140°C (Algodón suave / Lana)' : beadTypeKey === 'midi' ? '150°C - 160°C (Posición Media / Algodón)' : '170°C - 180°C (Algodón Fuerte)'} <strong>sin vapor</strong>.</li>
+                          <li>Cubre el diseño con papel de hornear o papel oficial de planchado Hama.</li>
+                          <li>Realiza movimientos circulares suaves durante <strong>{beadTypeKey === 'mini' ? '5-8 segundos' : '12-20 segundos'}</strong> hasta que el color de las cuentas se transparente a través del papel.</li>
+                          <li>Coloca un libro pesado encima mientras se enfría durante 5 minutos para evitar que la figura se curve.</li>
+                        </ul>
+                      </div>
+                    </div>
+                  ) : (
+                    /* INSTRUCCIONES Y DESGLOSE CAPA POR CAPA MODO 3D */
+                    <div className="p-4 space-y-4 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                      <p className="text-slate-500 dark:text-slate-400">
+                        Para construir la figura tridimensional, monta y plancha cada una de las <strong>{totalLayers3D} capas por separado</strong>. Después, apílalas en orden numérico utilizando silicona caliente, pegamento de cianoacrilato o cinta de doble cara extrafuerte.
+                      </p>
+
+                      <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                        {gridData?.layersData.map((layerObj) => {
+                          const isFocused = activeLayerFilter === layerObj.layerNumber;
+                          return (
+                            <div
+                              key={layerObj.layerNumber}
+                              onClick={() => setActiveLayerFilter(isFocused ? 'all' : layerObj.layerNumber)}
+                              className={`p-3 rounded-xl border cursor-pointer transition flex items-center justify-between gap-3 ${isFocused
+                                ? 'bg-indigo-600/10 border-indigo-500'
+                                : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-indigo-400'
+                                }`}
+                            >
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2 py-0.5 rounded bg-indigo-600 text-white font-bold text-[11px]">
+                                    Capa {layerObj.layerNumber} de {totalLayers3D}
+                                  </span>
+                                  <span className="font-bold text-slate-800 dark:text-slate-100">
+                                    {layerObj.layerNumber === 1
+                                      ? 'Base Inferior de Soporte'
+                                      : layerObj.layerNumber === totalLayers3D
+                                        ? 'Relieve Frontal Superior'
+                                        : `Nivel Intermedio #${layerObj.layerNumber}`}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                  Requiere <strong>{layerObj.beads.length} cuentas</strong>. Haz clic para aislar esta capa en el visor 3D.
+                                </p>
+                              </div>
+
+                              <MiniLayerCanvas
+                                width={gridData.width}
+                                height={gridData.height}
+                                beads={layerObj.beads}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-200">
+                        <h3 className="font-bold mb-1">💡 Consejo de Ensamblado 3D</h3>
+                        <p>
+                          Plancha las capas intermedias (Capas 1 a {totalLayers3D - 1}) por <strong>ambas caras</strong> para que tengan un grosor uniforme y mayor rigidez estructural. Plancha la última capa (Capa {totalLayers3D}) solo por el reverso para dejar la cara frontal con el acabado cilíndrico limpio.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </main>
+
+            {/* ========================================== */}
+            {/* MODAL DE SELECCIÓN DE PALETA HAMA          */}
+            {/* ========================================== */}
+            {showPaletteModal && (
+              <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 no-print">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl">
+                  <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-extrabold">Paleta Oficial Hama Beads Midi (30 Colores)</h3>
+                      <p className="text-xs text-slate-500">Activa o desactiva los botes de colores que tengas disponibles en casa</p>
+                    </div>
+                    <button
+                      onClick={() => setShowPaletteModal(false)}
+                      className="px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 font-bold text-xs"
+                    >
+                      Cerrar ✕
+                    </button>
+                  </div>
+
+                  <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex gap-2 bg-slate-50 dark:bg-slate-950/50 text-xs">
+                    <button
+                      onClick={() => setEnabledColorIds(HAMA_PALETTE.map(c => c.id))}
+                      className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold"
+                    >
+                      Seleccionar Todos (30)
+                    </button>
+                    <button
+                      onClick={() => setEnabledColorIds(['01', '03', '05', '08', '10', '18'])}
+                      className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 font-semibold"
+                    >
+                      Solo Colores Básicos (6)
+                    </button>
+                  </div>
+
+                  <div className="p-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                    {HAMA_PALETTE.map(c => {
+                      const checked = enabledColorIds.includes(c.id);
+                      return (
+                        <label
+                          key={c.id}
+                          className={`p-2 rounded-xl border flex items-center gap-2.5 cursor-pointer transition ${checked
+                            ? 'border-indigo-500 bg-indigo-500/5'
+                            : 'border-slate-200 dark:border-slate-800 opacity-50'
+                            }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              if (checked && enabledColorIds.length === 1) return;
+                              setEnabledColorIds(prev =>
+                                checked ? prev.filter(id => id !== c.id) : [...prev, c.id]
+                              );
+                            }}
+                            className="accent-indigo-600"
+                          />
+                          <span
+                            className="w-5 h-5 rounded-full border border-slate-400 shrink-0"
+                            style={{ backgroundColor: c.hex }}
+                          />
+                          <span className="truncate font-medium">
+                            <strong>#{c.id}</strong> {c.name.split(' (')[0]}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // Miniatura 2D de cada capa para la guía paso a paso en modo 3D
+      function MiniLayerCanvas({ width, height, beads }) {
+        const ref = useRef(null);
+        useEffect(() => {
+          const canvas = ref.current;
+          if (!canvas) return;
+          const size = 54;
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          ctx.clearRect(0, 0, size, size);
+
+          const scale = Math.min(size / width, size / height);
+          const offsetX = (size - width * scale) / 2;
+          const offsetY = (size - height * scale) / 2;
+
+          beads.forEach(b => {
+            ctx.fillStyle = b.color.hex;
+            ctx.fillRect(
+              offsetX + b.x * scale,
+              offsetY + b.y * scale,
+              Math.max(1.5, scale * 0.9),
+              Math.max(1.5, scale * 0.9)
+            );
+          });
+        }, [width, height, beads]);
+
+        return (
+          <canvas
+            ref={ref}
+            className="w-14 h-14 rounded-lg bg-slate-900 border border-slate-700 shrink-0"
+          />
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<App />);
+    </script>
+  </body>
+
+</html>

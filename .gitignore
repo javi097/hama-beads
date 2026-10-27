@@ -33,3 +33,15 @@ dist-ssr
 
 # Windows
 Thumbs.db
+
+# Vitest reports and artifacts
+.vitest/
+
+# Coverage (Vitest)
+coverage/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Herramientas de agente / entorno
+.antigravity/
