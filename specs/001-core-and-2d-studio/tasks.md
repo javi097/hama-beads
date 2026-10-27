@@ -2,7 +2,7 @@
 
 Plan de referencia: `specs/001-core-and-2d-studio/plan.md` (aprobado)
 
-Estado de avance: 6 / 9 tareas completadas
+Estado de avance: 7 / 9 tareas completadas
 
 ---
 
@@ -72,7 +72,7 @@ Estado de avance: 6 / 9 tareas completadas
 
 ---
 
-- [ ] **T7. Panel de guía: tabla de materiales, resumen de placas y modal de paleta.** RF-8, RF-11, RF-12, RF-13
+- [x] **T7. Panel de guía: tabla de materiales, resumen de placas y modal de paleta.** RF-8, RF-11, RF-12, RF-13
   - Crear `src/hama/components/Guide/ColorInventoryTable.tsx`:
     - Deriva `ColorCount[]` de `gridData.cells` (recuento por id, ordenado por count descendente).
     - Muestra muestra de color circular con código interior (color de texto adaptado a luminancia), nombre y recuento en badge.
