@@ -2,7 +2,7 @@
 
 Plan de referencia: `specs/001-core-and-2d-studio/plan.md` (aprobado)
 
-Estado de avance: 3 / 9 tareas completadas
+Estado de avance: 4 / 9 tareas completadas
 
 ---
 
@@ -36,7 +36,7 @@ Estado de avance: 3 / 9 tareas completadas
 
 ---
 
-- [ ] **T4. Store global Zustand con persistencia.** RF-1, RF-2, RF-3, RF-4, RF-6, RF-8, RF-9, RF-10, RF-11, RNF-4
+- [x] **T4. Store global Zustand con persistencia.** RF-1, RF-2, RF-3, RF-4, RF-6, RF-8, RF-9, RF-10, RF-11, RNF-4
   - Crear `src/hama/store/hama.store.ts` con el store Zustand tipado con `HamaStoreState` y todas las acciones descritas en el plan.
   - Configurar el middleware `persist` de Zustand apuntando a `localStorage` con clave `hama-storage`.
   - Los campos `imageSrc` y `gridData` deben quedar **excluidos** de la persistencia (usando la opción `partialize` del middleware persist).
