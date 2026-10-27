@@ -2,7 +2,7 @@
 
 Plan de referencia: `specs/001-core-and-2d-studio/plan.md` (aprobado)
 
-Estado de avance: 1 / 9 tareas completadas
+Estado de avance: 2 / 9 tareas completadas
 
 ---
 
@@ -19,7 +19,7 @@ Estado de avance: 1 / 9 tareas completadas
 
 ---
 
-- [ ] **T2. Core matemático puro: calculadora de cuadrícula y cuantizador de color.** RF-3, RF-4, RF-5, RF-6, RF-7
+- [x] **T2. Core matemático puro: calculadora de cuadrícula y cuantizador de color.** RF-3, RF-4, RF-5, RF-6, RF-7
   - Crear `src/hama/core/grid-calculator.ts` con las funciones puras: `calcBeadCount`, `clampCm`, `calcLockedDimension` y `calcBoardsLayout`, con sus firmas y lógica exactas según el plan.
   - Crear `src/hama/core/quantizer.ts` con las funciones puras: `redmeanDistance`, `findClosestColor`, `detectBackgroundColor`, `isBackgroundPixel` y `processPixel`, con sus firmas y lógica exactas según el plan.
   - Ninguna función puede importar módulos de React, acceder al DOM ni leer variables globales de estado.
