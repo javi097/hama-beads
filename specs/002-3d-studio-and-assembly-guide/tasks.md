@@ -43,7 +43,7 @@
   - Crear `src/hama/components/Controls/Mode3DSelector.tsx` con selector de los 3 modos 3D y sus parámetros específicos.
   - Hecho cuando: los componentes renderizan reactivamente en pantalla con estilos de Tailwind CSS y conectan sus controles con el store de Zustand.
 
-- [ ] **T8. Generador y Exportador de Manual de Montaje en PDF.** RF-6
+- [x] **T8. Generador y Exportador de Manual de Montaje en PDF.** RF-6
   - Implementar `src/hama/core/pdf-exporter.ts` con `exportAssemblyManualPdf` usando `jspdf` para componer: portada con vista isométrica, metadatos y tabla BOM global; y páginas secuenciales con diagramas de cuadrícula numerada, coordenadas métricas, códigos de color Hama legibles y mini-inventario por paso.
   - Crear `src/hama/components/Guide/ExportPdfButton.tsx` con spinner de carga y feedback de progreso.
   - Crear tests unitarios en `src/hama/core/__tests__/pdf-exporter.test.ts`.

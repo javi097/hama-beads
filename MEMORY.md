@@ -33,4 +33,4 @@
   - Resultado: 49/49 tests en verde, 0 errores TS, 0 warnings ESLint, build exitoso.
 
 ## Próximos Pasos
-- **Spec 002 en progreso:** T1 a T7 completadas (motores 3D, store, hook Three.js y UI del visor 3D). 97 tests en verde. Siguiente: T8 (Generador y exportador de manual de montaje PDF).
+- **Spec 002 en progreso:** T1 a T8 completadas (motores 3D, store, hook Three.js, UI y exportador PDF). 100 tests en verde. Siguiente: T9 (Integración global del Estudio 3D y Pestañas 2D/3D).
