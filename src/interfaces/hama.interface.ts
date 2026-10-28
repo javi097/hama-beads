@@ -1,3 +1,5 @@
+import type { Mode3DType, InterlockingStructureType } from './hama-3d.interface'
+
 export interface HamaColor {
   id: string
   name: string
@@ -54,4 +56,14 @@ export interface HamaStoreState {
   showCodes: boolean
   beadShape: 'hollow' | 'pixel'
   highlightedColorId: string | null
+  // Estudio 3D
+  activeView: '2d' | '3d'
+  mode3d: Mode3DType
+  hollowLayersCount: number
+  hollowWallThickness: 1 | 2
+  interlockingType: InterlockingStructureType
+  interlockingDepthBeads: number
+  reliefLevels: number
+  explodedGapMm: number
+  activeLayerIndex: number | null
 }

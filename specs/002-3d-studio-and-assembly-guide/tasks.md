@@ -25,7 +25,7 @@
   - Crear suite de pruebas en `src/hama/core/__tests__/assembly-guide.test.ts`.
   - Hecho cuando: los tests unitarios validan la elevación acumulativa de relieve y que la suma de perlas de todos los pasos coincide exactamente con el inventario total 3D.
 
-- [ ] **T5. Estado global reactivo para el Estudio 3D en Zustand.** RF-1, RF-2, RF-3, RF-4, RF-5
+- [x] **T5. Estado global reactivo para el Estudio 3D en Zustand.** RF-1, RF-2, RF-3, RF-4, RF-5
   - Extender `HamaStoreState` y `hama.store.ts` con las propiedades: `activeView ('2d' | '3d')`, `mode3d ('hollow' | 'interlocking' | 'relief')`, `hollowLayersCount`, `hollowWallThickness`, `interlockingType`, `reliefLevels`, `explodedGapMm` y `activeLayerIndex`.
   - Implementar las acciones atómicas e inmutables correspondientes y actualizar `hama-storage` en `localStorage`.
   - Añadir pruebas unitarias en `src/hama/store/__tests__/hama.store.test.ts`.

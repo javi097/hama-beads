@@ -33,4 +33,4 @@
   - Resultado: 49/49 tests en verde, 0 errores TS, 0 warnings ESLint, build exitoso.
 
 ## Próximos Pasos
-- **Spec 002 en progreso:** T1 a T4 completadas (motores 3D: Hollow, Interlocking, Relief y Guía de montaje). 77 tests en verde. Siguiente: T5 (Estado global reactivo 3D en Zustand).
+- **Spec 002 en progreso:** T1 a T5 completadas (motores 3D y store reactivo Zustand). 87 tests en verde. Siguiente: T6 (Hook de renderizado WebGL con Three.js e InstancedMesh).

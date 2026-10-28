@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { GridData, HamaStoreState } from '@/interfaces/hama.interface'
+import type { Mode3DType, InterlockingStructureType } from '@/interfaces/hama-3d.interface'
 import { BEAD_TYPES, HAMA_PALETTE } from '@/hama/core/palette.const'
 import { calcAdaptiveDimensions, calcLockedDimension, clampCm } from '@/hama/core/grid-calculator'
 
@@ -18,6 +19,16 @@ export interface HamaStoreActions {
   setShowCodes: (show: boolean) => void
   setBeadShape: (shape: 'hollow' | 'pixel') => void
   setHighlightedColorId: (id: string | null) => void
+  // Estudio 3D
+  setActiveView: (view: '2d' | '3d') => void
+  setMode3d: (mode: Mode3DType) => void
+  setHollowLayersCount: (count: number) => void
+  setHollowWallThickness: (thickness: 1 | 2) => void
+  setInterlockingType: (type: InterlockingStructureType) => void
+  setInterlockingDepthBeads: (depth: number) => void
+  setReliefLevels: (levels: number) => void
+  setExplodedGapMm: (gap: number) => void
+  setActiveLayerIndex: (index: number | null) => void
 }
 
 export type HamaStore = HamaStoreState & HamaStoreActions
@@ -37,6 +48,16 @@ const DEFAULT_STATE: HamaStoreState = {
   showCodes: false,
   beadShape: 'hollow',
   highlightedColorId: null,
+  // Estudio 3D
+  activeView: '2d',
+  mode3d: 'hollow',
+  hollowLayersCount: 5,
+  hollowWallThickness: 1,
+  interlockingType: 'box',
+  interlockingDepthBeads: 5,
+  reliefLevels: 3,
+  explodedGapMm: 0,
+  activeLayerIndex: null,
 }
 
 export const useHamaStore = create<HamaStore>()(
@@ -141,6 +162,41 @@ export const useHamaStore = create<HamaStore>()(
         set((state) => ({
           highlightedColorId: state.highlightedColorId === id ? null : id,
         }))
+      },
+
+      setActiveView: (activeView) => set({ activeView }),
+
+      setMode3d: (mode3d) => set({ mode3d, activeLayerIndex: null }),
+
+      setHollowLayersCount: (count) => {
+        const clamped = Math.max(3, Math.min(30, Math.round(count)))
+        set({ hollowLayersCount: clamped })
+      },
+
+      setHollowWallThickness: (thickness) => {
+        set({ hollowWallThickness: thickness === 2 ? 2 : 1 })
+      },
+
+      setInterlockingType: (interlockingType) => set({ interlockingType }),
+
+      setInterlockingDepthBeads: (depth) => {
+        const clamped = Math.max(3, Math.min(30, Math.round(depth)))
+        set({ interlockingDepthBeads: clamped })
+      },
+
+      setReliefLevels: (levels) => {
+        const clamped = Math.max(2, Math.min(6, Math.round(levels)))
+        set({ reliefLevels: clamped })
+      },
+
+      setExplodedGapMm: (gap) => {
+        const clamped = Math.max(0, Math.min(50, Number(gap.toFixed(1))))
+        set({ explodedGapMm: clamped })
+      },
+
+      setActiveLayerIndex: (index) => {
+        const activeLayerIndex = index !== null ? Math.max(1, Math.round(index)) : null
+        set({ activeLayerIndex })
       },
     }),
     {

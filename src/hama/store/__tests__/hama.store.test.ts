@@ -40,6 +40,15 @@ describe('hama.store', () => {
       showCodes: false,
       beadShape: 'hollow',
       highlightedColorId: null,
+      activeView: '2d',
+      mode3d: 'hollow',
+      hollowLayersCount: 5,
+      hollowWallThickness: 1,
+      interlockingType: 'box',
+      interlockingDepthBeads: 5,
+      reliefLevels: 3,
+      explodedGapMm: 0,
+      activeLayerIndex: null,
     })
   })
 
@@ -133,5 +142,104 @@ describe('hama.store', () => {
     expect(parsed.state.beadTypeId).toBe('maxi')
     expect(parsed.state.imageSrc).toBeUndefined()
     expect(parsed.state.gridData).toBeUndefined()
+  })
+
+  describe('Estudio 3D (Zustand state & actions)', () => {
+    it('setActiveView alterna entre 2d y 3d', () => {
+      expect(useHamaStore.getState().activeView).toBe('2d')
+      useHamaStore.getState().setActiveView('3d')
+      expect(useHamaStore.getState().activeView).toBe('3d')
+      useHamaStore.getState().setActiveView('2d')
+      expect(useHamaStore.getState().activeView).toBe('2d')
+    })
+
+    it('setMode3d cambia el modo 3D y resetea activeLayerIndex', () => {
+      useHamaStore.getState().setActiveLayerIndex(3)
+      expect(useHamaStore.getState().activeLayerIndex).toBe(3)
+
+      useHamaStore.getState().setMode3d('interlocking')
+      expect(useHamaStore.getState().mode3d).toBe('interlocking')
+      expect(useHamaStore.getState().activeLayerIndex).toBeNull()
+
+      useHamaStore.getState().setMode3d('relief')
+      expect(useHamaStore.getState().mode3d).toBe('relief')
+    })
+
+    it('setHollowLayersCount clampea entre 3 y 30', () => {
+      useHamaStore.getState().setHollowLayersCount(1)
+      expect(useHamaStore.getState().hollowLayersCount).toBe(3)
+
+      useHamaStore.getState().setHollowLayersCount(50)
+      expect(useHamaStore.getState().hollowLayersCount).toBe(30)
+
+      useHamaStore.getState().setHollowLayersCount(8)
+      expect(useHamaStore.getState().hollowLayersCount).toBe(8)
+    })
+
+    it('setHollowWallThickness alterna entre 1 y 2', () => {
+      useHamaStore.getState().setHollowWallThickness(2)
+      expect(useHamaStore.getState().hollowWallThickness).toBe(2)
+
+      useHamaStore.getState().setHollowWallThickness(1)
+      expect(useHamaStore.getState().hollowWallThickness).toBe(1)
+    })
+
+    it('setInterlockingType alterna entre box y cross_ribs', () => {
+      useHamaStore.getState().setInterlockingType('cross_ribs')
+      expect(useHamaStore.getState().interlockingType).toBe('cross_ribs')
+
+      useHamaStore.getState().setInterlockingType('box')
+      expect(useHamaStore.getState().interlockingType).toBe('box')
+    })
+
+    it('setInterlockingDepthBeads clampea entre 3 y 30', () => {
+      useHamaStore.getState().setInterlockingDepthBeads(1)
+      expect(useHamaStore.getState().interlockingDepthBeads).toBe(3)
+
+      useHamaStore.getState().setInterlockingDepthBeads(40)
+      expect(useHamaStore.getState().interlockingDepthBeads).toBe(30)
+    })
+
+    it('setReliefLevels clampea entre 2 y 6', () => {
+      useHamaStore.getState().setReliefLevels(1)
+      expect(useHamaStore.getState().reliefLevels).toBe(2)
+
+      useHamaStore.getState().setReliefLevels(10)
+      expect(useHamaStore.getState().reliefLevels).toBe(6)
+
+      useHamaStore.getState().setReliefLevels(4)
+      expect(useHamaStore.getState().reliefLevels).toBe(4)
+    })
+
+    it('setExplodedGapMm clampea entre 0 y 50 mm', () => {
+      useHamaStore.getState().setExplodedGapMm(-5)
+      expect(useHamaStore.getState().explodedGapMm).toBe(0)
+
+      useHamaStore.getState().setExplodedGapMm(80)
+      expect(useHamaStore.getState().explodedGapMm).toBe(50)
+
+      useHamaStore.getState().setExplodedGapMm(15.5)
+      expect(useHamaStore.getState().explodedGapMm).toBe(15.5)
+    })
+
+    it('setActiveLayerIndex establece la capa activa o null', () => {
+      useHamaStore.getState().setActiveLayerIndex(2)
+      expect(useHamaStore.getState().activeLayerIndex).toBe(2)
+
+      useHamaStore.getState().setActiveLayerIndex(null)
+      expect(useHamaStore.getState().activeLayerIndex).toBeNull()
+    })
+
+    it('persiste la configuración 3D en localStorage', () => {
+      useHamaStore.getState().setActiveView('3d')
+      useHamaStore.getState().setMode3d('interlocking')
+      useHamaStore.getState().setExplodedGapMm(20)
+
+      const storedRaw = memoryStorage['hama-storage']
+      const parsed = JSON.parse(storedRaw)
+      expect(parsed.state.activeView).toBe('3d')
+      expect(parsed.state.mode3d).toBe('interlocking')
+      expect(parsed.state.explodedGapMm).toBe(20)
+    })
   })
 })
