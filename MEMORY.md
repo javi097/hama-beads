@@ -33,4 +33,4 @@
   - Resultado: 49/49 tests en verde, 0 errores TS, 0 warnings ESLint, build exitoso.
 
 ## Próximos Pasos
-- Spec 001 completada y todos los bugs post-validación corregidos. Pendiente: definir Spec 002 (visor 3D / Scene3D con Three.js).
+- Spec 002: Plan y Tareas (`specs/002-3d-studio-and-assembly-guide/tasks.md`) desglosados en 9 tareas atómicas (T1 a T9). Listos para iniciar `/sdd-implement 002-3d-studio-and-assembly-guide T1`.
