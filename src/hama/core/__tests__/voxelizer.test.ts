@@ -4,6 +4,7 @@ import {
   identifyInteriorCells,
   generateHollowLayers,
   generateInterlockingPlates,
+  generateReliefLayers,
 } from '../voxelizer'
 import { HAMA_PALETTE } from '../palette.const'
 import type { BeadCell } from '@/interfaces/hama.interface'
@@ -329,6 +330,66 @@ describe('voxelizer — Hollow Slicing (Modo 1)', () => {
           expect(mainHasBead || ribHasBead).toBe(true)
         }
       })
+    })
+  })
+
+  describe('generateReliefLayers (Modo 3)', () => {
+    it('devuelve array vacío si la cuadrícula base está vacía', () => {
+      expect(generateReliefLayers([], 3, 5.0)).toEqual([])
+      expect(generateReliefLayers([[]], 3, 5.0)).toEqual([])
+    })
+
+    it('limita los niveles de relieve estrictamente al rango [2, 6]', () => {
+      const grid = createSolidGrid(4, 4, redBead)
+      const layersLow = generateReliefLayers(grid, 1, 5.0)
+      expect(layersLow).toHaveLength(2)
+
+      const layersHigh = generateReliefLayers(grid, 10, 5.0)
+      expect(layersHigh).toHaveLength(6)
+    })
+
+    it('la capa 1 (base sólida) contiene el 100% de las perlas del diseño original', () => {
+      const grid = createSolidGrid(4, 4, redBead)
+      grid[0][0] = null // Un hueco transparente
+      const layers = generateReliefLayers(grid, 3, 5.0)
+
+      expect(layers[0].layerIndex).toBe(1)
+      expect(layers[0].beadCount).toBe(15)
+      expect(layers[0].cells[0][0]).toBeNull()
+      expect(layers[0].cells[1][1]).toEqual(redBead)
+    })
+
+    it('rellena sólidamente todas las capas inferiores a la altura de luminancia (acumulativo)', () => {
+      const whiteBead = HAMA_PALETTE.find((c) => c.id === '01')! // luminance 1.0
+      const blackBead = HAMA_PALETTE.find((c) => c.id === '18')! // luminance 0.0
+
+      const customGrid: BeadCell[][] = [
+        [blackBead, whiteBead],
+      ]
+
+      const layers = generateReliefLayers(customGrid, 3, 5.0)
+      expect(layers).toHaveLength(3)
+
+      // Capa 1: Ambos están presentes
+      expect(layers[0].cells[0][0]).toEqual(blackBead)
+      expect(layers[0].cells[0][1]).toEqual(whiteBead)
+
+      // Capa 3: El negro (nivel 1) ya no está (null), pero el blanco (nivel 3) sí
+      expect(layers[2].cells[0][0]).toBeNull()
+      expect(layers[2].cells[0][1]).toEqual(whiteBead)
+
+      // Recuento decreciente o igual: Capa 1 >= Capa 2 >= Capa 3
+      expect(layers[0].beadCount).toBeGreaterThanOrEqual(layers[1].beadCount)
+      expect(layers[1].beadCount).toBeGreaterThanOrEqual(layers[2].beadCount)
+    })
+
+    it('calcula zOffsetMm proporcionalmente a cada nivel', () => {
+      const grid = createSolidGrid(3, 3, redBead)
+      const layers = generateReliefLayers(grid, 3, 5.0)
+
+      expect(layers[0].zOffsetMm).toBe(0)
+      expect(layers[1].zOffsetMm).toBe(5.0)
+      expect(layers[2].zOffsetMm).toBe(10.0)
     })
   })
 })

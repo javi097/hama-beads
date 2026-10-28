@@ -516,3 +516,74 @@ export function generateInterlockingPlates(
     },
   ]
 }
+
+/**
+ * Modo 3: Genera escultura en bajorrelieve según luminancia perceptual acumulativa.
+ * Clasifica la luminancia de cada celda en rangos equitativos correspondientes al número
+ * de niveles configurado (entre 2 y 6).
+ * Rellena sólidamente todas las capas inferiores a la altura asignada para que la escultura
+ * sea físicamente construible sin perlas flotantes.
+ *
+ * @param baseGrid Cuadrícula 2D de diseño base
+ * @param levels Número de niveles de relieve deseados (acotado a [2, 6])
+ * @param diameterMm Diámetro de la perla en mm (ej. 5.0 para Midi)
+ * @returns Array de capas horizontales apiladas VoxelLayer[]
+ */
+export function generateReliefLayers(
+  baseGrid: BeadCell[][],
+  levels: number,
+  diameterMm: number
+): VoxelLayer[] {
+  const rows = baseGrid.length
+  if (rows === 0) return []
+  const cols = baseGrid[0].length
+  if (cols === 0) return []
+
+  const clampedLevels = Math.max(2, Math.min(6, Math.round(levels)))
+
+  // Calcular el nivel objetivo de cada perla (1 a clampedLevels)
+  const targetLevels: number[][] = Array.from({ length: rows }, (_, y) =>
+    Array.from({ length: cols }, (_, x) => {
+      const bead = baseGrid[y][x]
+      if (bead === null) return 0
+      const lum = Math.max(0, Math.min(1, bead.luminance))
+      const lvl = Math.floor(lum * clampedLevels) + 1
+      return Math.min(clampedLevels, lvl)
+    })
+  )
+
+  const layers: VoxelLayer[] = []
+
+  for (let lvl = 1; lvl <= clampedLevels; lvl++) {
+    let beadCount = 0
+    const cells: BeadCell[][] = Array.from({ length: rows }, (_, y) =>
+      Array.from({ length: cols }, (_, x) => {
+        // Relleno acumulativo inferior sólido
+        if (targetLevels[y][x] >= lvl) {
+          beadCount++
+          return baseGrid[y][x]
+        }
+        return null
+      })
+    )
+
+    let layerName: string
+    if (lvl === 1) {
+      layerName = `Capa 1 (Base Sólida)`
+    } else if (lvl === clampedLevels) {
+      layerName = `Capa ${lvl} (Cúspide)`
+    } else {
+      layerName = `Capa ${lvl} (Relieve Medio)`
+    }
+
+    layers.push({
+      layerIndex: lvl,
+      name: layerName,
+      cells,
+      beadCount,
+      zOffsetMm: (lvl - 1) * diameterMm,
+    })
+  }
+
+  return layers
+}

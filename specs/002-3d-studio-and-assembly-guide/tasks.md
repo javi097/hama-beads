@@ -19,7 +19,7 @@
   - Añadir casos de prueba de encastre en `src/hama/core/__tests__/voxelizer.test.ts`.
   - Hecho cuando: los tests unitarios comprueban que las pestañas de una placa coinciden con las ranuras de la placa perpendicular sin colisiones en aristas.
 
-- [ ] **T4. Motor de Relieve por Luminancia y Descomposición de Guía de Montaje.** RF-4, RF-6
+- [x] **T4. Motor de Relieve por Luminancia y Descomposición de Guía de Montaje.** RF-4, RF-6
   - Implementar `generateReliefLayers(baseGrid, levels, diameterMm)` en `src/hama/core/voxelizer.ts` con relleno sólido inferior acumulativo (2 a 6 niveles).
   - Implementar `deriveAssemblySteps(model: Model3DResult)` en `src/hama/core/assembly-guide.ts` generando la secuencia cronológica de pasos con recuentos parciales BOM y coordenadas.
   - Crear suite de pruebas en `src/hama/core/__tests__/assembly-guide.test.ts`.
