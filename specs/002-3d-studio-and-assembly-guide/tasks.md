@@ -13,7 +13,7 @@
   - Crear suite de pruebas unitarias en `src/hama/core/__tests__/voxelizer.test.ts`.
   - Hecho cuando: los tests unitarios verifican el vaciado exacto de celdas internas en capas intermedias, la preservación de capas sólidas base/tapa y la protección de piezas delgadas (< 3 perlas).
 
-- [ ] **T3. Motor matemático de Ensamblado Interlocking (Ranurado y Juntas a 90°).** RF-3
+- [x] **T3. Motor matemático de Ensamblado Interlocking (Ranurado y Juntas a 90°).** RF-3
   - Implementar en `src/hama/core/voxelizer.ts` la función pura `generateInterlockingPlates(baseGrid, structureType, depthBeads, diameterMm)` con soporte para *Caja 3D (6 placas)* y *Figura con costillas ortogonales*.
   - Generar pestañas y ranuras (Tabs & Slots) alternadas con paso exacto de 1 perla en aristas adyacentes a 90°.
   - Añadir casos de prueba de encastre en `src/hama/core/__tests__/voxelizer.test.ts`.
