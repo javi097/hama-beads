@@ -18,5 +18,11 @@
 - **Exportación PNG:** Descarga directa de patrón a 32 px por celda, reglas numéricas, códigos de perla y metadatos con fondo blanco.
 - **Zustand:** Estado global centralizado con persistencia en `localStorage` (clave `hama-storage`, excluyendo `imageSrc` y `gridData`).
 
+## Correcciones Post-Validación
+- **Bug fix renderizado 2D (2026-10-28):** Corregidos dos bugs en `src/hama/hooks/useCanvasRenderer.ts`:
+  1. **Contraste de texto:** El color del código numérico ahora se calcula exclusivamente por `color.luminance > 0.5` → `#000000` / `#ffffff`. Umbral anterior era 0.55 y el color oscuro era `#0f172a` (no puro). No depende de `darkMode`.
+  2. **Visibilidad a zoom bajo:** Eliminado el guard `cellSize >= 18`; los códigos se muestran siempre que `showCodes` esté activo. Tamaño de fuente: `Math.max(8, Math.floor(cellSize * 0.45))` (antes era `Math.max(9, Math.floor(cellSize * 0.34))`).
+  - Resultado: 0 errores TypeScript, 0 advertencias ESLint, 41/41 tests en verde.
+
 ## Próximos Pasos
-- Ejecutar `/sdd-validate 001-core-and-2d-studio` para la validación final de todos los criterios de aceptación RF por RF.
+- Spec 001 completada y todos los bugs post-validación corregidos. Pendiente: definir Spec 002 (visor 3D / Scene3D con Three.js).

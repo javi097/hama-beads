@@ -151,9 +151,9 @@ export function renderGrid2D(
         const cy = py + cellSize / 2
 
         if (beadShape === 'hollow') {
-          // Perla cilíndrica con hueco central simulado
+          // Perla cilíndrica: disco sólido si showCodes activo (el hueco solaparía el texto),
+          // cilíndrica con hueco interior si showCodes está desactivado.
           const outerRadius = cellSize * 0.45
-          const innerRadius = cellSize * 0.18
 
           ctx.beginPath()
           ctx.arc(cx, cy, outerRadius, 0, Math.PI * 2)
@@ -164,21 +164,26 @@ export function renderGrid2D(
           ctx.strokeStyle = 'rgba(0,0,0,0.28)'
           ctx.stroke()
 
-          // Hueco central oscuro
-          ctx.beginPath()
-          ctx.arc(cx, cy, innerRadius, 0, Math.PI * 2)
-          ctx.fillStyle = darkMode ? '#0f172a' : '#e2e8f0'
-          ctx.fill()
+          if (!showCodes) {
+            // Hueco central oscuro (solo cuando no se muestran códigos)
+            const innerRadius = cellSize * 0.18
+            ctx.beginPath()
+            ctx.arc(cx, cy, innerRadius, 0, Math.PI * 2)
+            ctx.fillStyle = darkMode ? '#0f172a' : '#e2e8f0'
+            ctx.fill()
+          }
         } else {
           // Cuadrado sólido (Modo Pixel Art)
           ctx.fillStyle = color.hex
           ctx.fillRect(px + 1, py + 1, cellSize - 2, cellSize - 2)
         }
 
-        // Mostrar código oficial Hama dentro de la perla si hay espacio
-        if (showCodes && cellSize >= 18) {
-          ctx.fillStyle = color.luminance > 0.55 ? '#0f172a' : '#ffffff'
-          ctx.font = `bold ${Math.max(9, Math.floor(cellSize * 0.34))}px monospace`
+        // El texto del código se dibuja SIEMPRE al final (última capa) para que
+        // nada lo solape. Color calculado exclusivamente por luminancia intrínseca
+        // de la perla; nunca depende del tema (darkMode).
+        if (showCodes) {
+          ctx.fillStyle = color.luminance > 0.5 ? '#000000' : '#ffffff'
+          ctx.font = `bold ${Math.max(8, Math.floor(cellSize * 0.45))}px monospace`
           ctx.textAlign = 'center'
           ctx.textBaseline = 'middle'
           ctx.fillText(color.id, cx, cy)
