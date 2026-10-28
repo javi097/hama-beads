@@ -37,7 +37,7 @@
   - Implementar el filtrado de capa/placa activa para aislamiento visual y el ciclo de vida defensivo con liberación de GPU (`dispose()`).
   - Hecho cuando: `npx tsc --noEmit` y `npm run lint` validan sin errores y se verifica la liberación de geometrías y materiales al desmontar.
 
-- [ ] **T7. Componentes de UI del Visor 3D y Selector de Modos.** RF-1, RF-2, RF-3, RF-4, RF-5
+- [x] **T7. Componentes de UI del Visor 3D y Selector de Modos.** RF-1, RF-2, RF-3, RF-4, RF-5
   - Crear `src/hama/components/Scene3D/VoxelScene3D.tsx` como lienzo de renderizado WebGL con reencuadre automático.
   - Crear `src/hama/components/Scene3D/LayerStackControls.tsx` con slider de vista explosionada, selector de capa activa y toggle de aislamiento.
   - Crear `src/hama/components/Controls/Mode3DSelector.tsx` con selector de los 3 modos 3D y sus parámetros específicos.

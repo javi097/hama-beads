@@ -1,8 +1,10 @@
-import type { BeadCell } from '@/interfaces/hama.interface'
+import type { BeadCell, GridData } from '@/interfaces/hama.interface'
 import type {
   VoxelLayer,
   InterlockingPlate,
   InterlockingStructureType,
+  Mode3DType,
+  Model3DResult,
 } from '@/interfaces/hama-3d.interface'
 import { HAMA_PALETTE } from './palette.const'
 
@@ -586,4 +588,110 @@ export function generateReliefLayers(
   }
 
   return layers
+}
+
+export interface ComputeModel3DOptions {
+  mode3d: Mode3DType
+  hollowLayersCount: number
+  hollowWallThickness: 1 | 2
+  interlockingType: InterlockingStructureType
+  interlockingDepthBeads: number
+  reliefLevels: number
+  diameterMm: number
+}
+
+/**
+ * Genera el modelo tridimensional unificado (Model3DResult) para el visor 3D,
+ * la guía de montaje y la exportación de documentos PDF.
+ */
+export function computeModel3D(
+  gridData: GridData | null,
+  options: ComputeModel3DOptions
+): Model3DResult | null {
+  if (
+    !gridData ||
+    gridData.cells.length === 0 ||
+    gridData.cols === 0 ||
+    gridData.rows === 0
+  ) {
+    return null
+  }
+
+  const { cells, cols, rows } = gridData
+  const {
+    mode3d,
+    hollowLayersCount,
+    hollowWallThickness,
+    interlockingType,
+    interlockingDepthBeads,
+    reliefLevels,
+    diameterMm,
+  } = options
+
+  if (mode3d === 'hollow') {
+    const layers = generateHollowLayers(
+      cells,
+      hollowLayersCount,
+      hollowWallThickness,
+      diameterMm
+    )
+    const totalBeads = layers.reduce((sum, l) => sum + l.beadCount, 0)
+    return {
+      mode: 'hollow',
+      layers,
+      totalBeads,
+      dimensionsMm: {
+        x: cols * diameterMm,
+        y: rows * diameterMm,
+        z: layers.length * diameterMm,
+      },
+    }
+  }
+
+  if (mode3d === 'interlocking') {
+    const plates = generateInterlockingPlates(
+      cells,
+      interlockingType,
+      interlockingDepthBeads,
+      diameterMm
+    )
+    let totalBeads = 0
+    plates.forEach((p) => {
+      p.cells.forEach((row) => {
+        row.forEach((c) => {
+          if (c !== null) totalBeads++
+        })
+      })
+    })
+
+    const depth = Math.max(3, Math.min(30, Math.round(interlockingDepthBeads)))
+
+    return {
+      mode: 'interlocking',
+      plates,
+      totalBeads,
+      dimensionsMm: {
+        x: cols * diameterMm,
+        y: rows * diameterMm,
+        z: depth * diameterMm,
+      },
+    }
+  }
+
+  if (mode3d === 'relief') {
+    const layers = generateReliefLayers(cells, reliefLevels, diameterMm)
+    const totalBeads = layers.reduce((sum, l) => sum + l.beadCount, 0)
+    return {
+      mode: 'relief',
+      layers,
+      totalBeads,
+      dimensionsMm: {
+        x: cols * diameterMm,
+        y: rows * diameterMm,
+        z: layers.length * diameterMm,
+      },
+    }
+  }
+
+  return null
 }

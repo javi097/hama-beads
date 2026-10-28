@@ -5,6 +5,7 @@ import {
   generateHollowLayers,
   generateInterlockingPlates,
   generateReliefLayers,
+  computeModel3D,
 } from '../voxelizer'
 import { HAMA_PALETTE } from '../palette.const'
 import type { BeadCell } from '@/interfaces/hama.interface'
@@ -390,6 +391,88 @@ describe('voxelizer — Hollow Slicing (Modo 1)', () => {
       expect(layers[0].zOffsetMm).toBe(0)
       expect(layers[1].zOffsetMm).toBe(5.0)
       expect(layers[2].zOffsetMm).toBe(10.0)
+    })
+  })
+
+  describe('computeModel3D (Unified 3D Model Generator)', () => {
+    it('devuelve null si gridData es null o no tiene celdas', () => {
+      const resNull = computeModel3D(null, {
+        mode3d: 'hollow',
+        hollowLayersCount: 5,
+        hollowWallThickness: 1,
+        interlockingType: 'box',
+        interlockingDepthBeads: 5,
+        reliefLevels: 3,
+        diameterMm: 5.0,
+      })
+      expect(resNull).toBeNull()
+
+      const resEmpty = computeModel3D({ cols: 0, rows: 0, cells: [] }, {
+        mode3d: 'hollow',
+        hollowLayersCount: 5,
+        hollowWallThickness: 1,
+        interlockingType: 'box',
+        interlockingDepthBeads: 5,
+        reliefLevels: 3,
+        diameterMm: 5.0,
+      })
+      expect(resEmpty).toBeNull()
+    })
+
+    it('genera Model3DResult completo para modo hollow con dimensiones métricas calculadas', () => {
+      const grid = createSolidGrid(4, 4, redBead)
+      const res = computeModel3D({ cols: 4, rows: 4, cells: grid }, {
+        mode3d: 'hollow',
+        hollowLayersCount: 4,
+        hollowWallThickness: 1,
+        interlockingType: 'box',
+        interlockingDepthBeads: 5,
+        reliefLevels: 3,
+        diameterMm: 5.0,
+      })
+
+      expect(res).not.toBeNull()
+      expect(res?.mode).toBe('hollow')
+      expect(res?.layers).toHaveLength(4)
+      expect(res?.dimensionsMm).toEqual({ x: 20, y: 20, z: 20 })
+      expect(res?.totalBeads).toBeGreaterThan(0)
+    })
+
+    it('genera Model3DResult completo para modo interlocking (box)', () => {
+      const grid = createSolidGrid(4, 4, redBead)
+      const res = computeModel3D({ cols: 4, rows: 4, cells: grid }, {
+        mode3d: 'interlocking',
+        hollowLayersCount: 4,
+        hollowWallThickness: 1,
+        interlockingType: 'box',
+        interlockingDepthBeads: 4,
+        reliefLevels: 3,
+        diameterMm: 5.0,
+      })
+
+      expect(res).not.toBeNull()
+      expect(res?.mode).toBe('interlocking')
+      expect(res?.plates).toHaveLength(6)
+      expect(res?.dimensionsMm).toEqual({ x: 20, y: 20, z: 20 })
+      expect(res?.totalBeads).toBeGreaterThan(0)
+    })
+
+    it('genera Model3DResult completo para modo relief', () => {
+      const grid = createSolidGrid(4, 4, redBead)
+      const res = computeModel3D({ cols: 4, rows: 4, cells: grid }, {
+        mode3d: 'relief',
+        hollowLayersCount: 4,
+        hollowWallThickness: 1,
+        interlockingType: 'box',
+        interlockingDepthBeads: 4,
+        reliefLevels: 3,
+        diameterMm: 5.0,
+      })
+
+      expect(res).not.toBeNull()
+      expect(res?.mode).toBe('relief')
+      expect(res?.layers).toHaveLength(3)
+      expect(res?.dimensionsMm).toEqual({ x: 20, y: 20, z: 15 })
     })
   })
 })
