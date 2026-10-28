@@ -7,7 +7,7 @@
   - Crear `src/interfaces/hama-3d.interface.ts` con todos los contratos tipados estrictamente: `Mode3DType`, `VoxelPosition`, `VoxelBead`, `VoxelLayer`, `InterlockingPlate`, `AssemblyStep`, `Model3DResult` y `PdfExportOptions`.
   - Hecho cuando: `npx tsc --noEmit` compila sin errores y los tipos se exportan limpiamente sin ningún uso de `any`.
 
-- [ ] **T2. Motor matemático de Apilado Multicapa Hueco (Slicing Inteligente).** RF-2
+- [x] **T2. Motor matemático de Apilado Multicapa Hueco (Slicing Inteligente).** RF-2
   - Implementar en `src/hama/core/voxelizer.ts` la función pura `identifyInteriorCells(cells, wallThickness)` mediante erosión morfológica 4-conectada (grosor 1 o 2 perlas).
   - Implementar `generateHollowLayers(baseGrid, totalLayers, wallThickness, diameterMm)` garantizando que las capas 1 y N sean 100% sólidas y las intermedias vaciadas morfológicamente.
   - Crear suite de pruebas unitarias en `src/hama/core/__tests__/voxelizer.test.ts`.

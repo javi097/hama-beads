@@ -33,4 +33,4 @@
   - Resultado: 49/49 tests en verde, 0 errores TS, 0 warnings ESLint, build exitoso.
 
 ## Próximos Pasos
-- Spec 002: Plan y Tareas (`specs/002-3d-studio-and-assembly-guide/tasks.md`) desglosados en 9 tareas atómicas (T1 a T9). Listos para iniciar `/sdd-implement 002-3d-studio-and-assembly-guide T1`.
+- **Spec 002 en progreso:** T1 (contratos TypeScript y `jspdf`) y T2 (motor matemático `voxelizer.ts` para Apilado Multicapa Hueco) completados. 60 tests en verde. Siguiente: T3 (Ensamblado Interlocking con tabs & slots a 90°).
