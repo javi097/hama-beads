@@ -7,9 +7,15 @@ import { cn } from '@/lib/utils'
 
 interface Props {
   className?: string
+  totalBeadsOverride?: number
+  dimensionsOverride?: string
 }
 
-export default function BoardsSummary({ className }: Props) {
+export default function BoardsSummary({
+  className,
+  totalBeadsOverride,
+  dimensionsOverride,
+}: Props) {
   const widthCm = useHamaStore((state) => state.widthCm)
   const heightCm = useHamaStore((state) => state.heightCm)
   const beadTypeId = useHamaStore((state) => state.beadTypeId)
@@ -25,10 +31,11 @@ export default function BoardsSummary({ className }: Props) {
     )
   }, [gridData?.cols, gridData?.rows, beadType.pegboardSize])
 
-  const { total: totalBeads } = useMemo(() => {
+  const { total: storeTotalBeads } = useMemo(() => {
     return deriveColorInventory(gridData?.cells ?? [])
   }, [gridData?.cells])
 
+  const totalBeads = totalBeadsOverride ?? storeTotalBeads
   const estimatedMinutes = Math.max(5, Math.ceil(totalBeads / 35))
 
   return (
@@ -41,7 +48,7 @@ export default function BoardsSummary({ className }: Props) {
       <div>
         <span className="text-slate-400 block text-[11px]">Tamaño Final</span>
         <span className="font-bold text-slate-800 dark:text-slate-100">
-          {widthCm} × {heightCm} cm
+          {dimensionsOverride ?? `${widthCm} × ${heightCm} cm`}
         </span>
       </div>
 

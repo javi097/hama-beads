@@ -3,16 +3,29 @@ import { useHamaStore } from '@/hama/store/hama.store'
 import { deriveColorInventory } from '@/hama/core/inventory'
 import { cn } from '@/lib/utils'
 
+import type { BeadCell } from '@/interfaces/hama.interface'
+
 interface Props {
   className?: string
+  cells?: BeadCell[][]
+  title?: string
+  subtitle?: string
 }
 
-export default function ColorInventoryTable({ className }: Props) {
-  const cells = useHamaStore((state) => state.gridData?.cells)
+export default function ColorInventoryTable({
+  className,
+  cells: cellsProp,
+  title = '1. Lista de Materiales y Colores Hama',
+  subtitle = 'Haz clic en un color para resaltarlo en el visor',
+}: Props) {
+  const storeCells = useHamaStore((state) => state.gridData?.cells)
   const highlightedColorId = useHamaStore((state) => state.highlightedColorId)
   const setHighlightedColorId = useHamaStore((state) => state.setHighlightedColorId)
 
-  const { items, total } = useMemo(() => deriveColorInventory(cells ?? []), [cells])
+  const { items, total } = useMemo(() => {
+    const activeCells = cellsProp ?? storeCells ?? []
+    return deriveColorInventory(activeCells)
+  }, [cellsProp, storeCells])
 
   return (
     <div
@@ -25,10 +38,10 @@ export default function ColorInventoryTable({ className }: Props) {
       <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-900/50">
         <div>
           <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-100">
-            1. Lista de Materiales y Colores Hama
+            {title}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Haz clic en un color para resaltarlo en el visor 2D
+            {subtitle}
           </p>
         </div>
         <div className="text-right">

@@ -49,7 +49,7 @@
   - Crear tests unitarios en `src/hama/core/__tests__/pdf-exporter.test.ts`.
   - Hecho cuando: los tests unitarios verifican la generación del documento y al accionar el botón se descarga un PDF legible en menos de 4 segundos.
 
-- [ ] **T9. Integración global del Estudio 3D y Pestañas en la página principal.** RF-1, RF-5, RF-6
+- [x] **T9. Integración global del Estudio 3D y Pestañas en la página principal.** RF-1, RF-5, RF-6
   - Incorporar selector de vista "Estudio 2D" / "Estudio 3D" en `src/hama/pages/StudioPage.tsx` y adaptar `src/hama/layouts/StudioLayout.tsx` para alternar fluidamente entre `Grid2DCanvas` y `VoxelScene3D` preservando el estado de la cuadrícula.
   - Verificar que la exportación PDF y los paneles de inventario se sincronicen con el modelo 3D activo.
   - Hecho cuando: el usuario puede alternar entre 2D y 3D, configurar y explorar los 3 modos volumétricos con vista explosionada, exportar el manual en PDF y todos los tests (`npm test`), linter (`npm run lint`) y build de producción (`npm run build`) quedan en verde.

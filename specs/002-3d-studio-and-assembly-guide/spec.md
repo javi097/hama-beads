@@ -1,5 +1,5 @@
 # Spec 002 — Estudio 3D y Guía de Montaje Multicapa
-Estado: aprobada
+Estado: implementada
 
 ---
 
