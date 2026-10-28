@@ -2,7 +2,7 @@
 
 ---
 
-- [ ] **T1. Contratos de datos TypeScript 3D y configuración de dependencias.** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6
+- [x] **T1. Contratos de datos TypeScript 3D y configuración de dependencias.** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6
   - Instalar `jspdf` como dependencia de producción para la exportación documental en cliente.
   - Crear `src/interfaces/hama-3d.interface.ts` con todos los contratos tipados estrictamente: `Mode3DType`, `VoxelPosition`, `VoxelBead`, `VoxelLayer`, `InterlockingPlate`, `AssemblyStep`, `Model3DResult` y `PdfExportOptions`.
   - Hecho cuando: `npx tsc --noEmit` compila sin errores y los tipos se exportan limpiamente sin ningún uso de `any`.
