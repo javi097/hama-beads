@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { GridData, HamaStoreState } from '@/interfaces/hama.interface'
-import { HAMA_PALETTE } from '@/hama/core/palette.const'
-import { calcLockedDimension, clampCm } from '@/hama/core/grid-calculator'
+import { BEAD_TYPES, HAMA_PALETTE } from '@/hama/core/palette.const'
+import { calcAdaptiveDimensions, calcLockedDimension, clampCm } from '@/hama/core/grid-calculator'
 
 export interface HamaStoreActions {
   setImageSrc: (src: string | null, aspectRatio?: number | null) => void
@@ -24,8 +24,8 @@ export type HamaStore = HamaStoreState & HamaStoreActions
 
 const DEFAULT_STATE: HamaStoreState = {
   beadTypeId: 'midi',
-  widthCm: 8,
-  heightCm: 8,
+  widthCm: 14.5,
+  heightCm: 14.5,
   lockAspect: true,
   removeBg: true,
   enabledColorIds: HAMA_PALETTE.map((c) => c.id),
@@ -46,26 +46,53 @@ export const useHamaStore = create<HamaStore>()(
 
       setImageSrc: (imageSrc, aspectRatio = null) => {
         set((state) => {
-          let heightCm = state.heightCm
-          if (aspectRatio !== null && aspectRatio !== undefined && state.lockAspect) {
-            heightCm = clampCm(calcLockedDimension(state.widthCm, aspectRatio))
+          if (!imageSrc) {
+            return { imageSrc: null, imageAspectRatio: null }
           }
+
+          const beadSpec = BEAD_TYPES[state.beadTypeId] || BEAD_TYPES.midi
+          const ratio =
+            aspectRatio !== null && aspectRatio !== undefined && aspectRatio > 0
+              ? aspectRatio
+              : 1
+
+          const dims = calcAdaptiveDimensions(
+            ratio,
+            beadSpec.diameterMm,
+            beadSpec.pegboardSize
+          )
+
           return {
             imageSrc,
-            imageAspectRatio: aspectRatio !== undefined ? aspectRatio : state.imageAspectRatio,
-            heightCm,
+            imageAspectRatio: ratio,
+            widthCm: dims.widthCm,
+            heightCm: dims.heightCm,
+            lockAspect: true,
           }
         })
       },
 
-      setBeadTypeId: (beadTypeId) => set({ beadTypeId }),
+      setBeadTypeId: (beadTypeId) => {
+        set((state) => {
+          const newBeadSpec = BEAD_TYPES[beadTypeId] || BEAD_TYPES.midi
+          return {
+            beadTypeId,
+            widthCm: clampCm(state.widthCm, newBeadSpec.diameterMm),
+            heightCm: clampCm(state.heightCm, newBeadSpec.diameterMm),
+          }
+        })
+      },
 
       setWidthCm: (cm) => {
         set((state) => {
-          const widthCm = clampCm(cm)
+          const beadSpec = BEAD_TYPES[state.beadTypeId] || BEAD_TYPES.midi
+          const widthCm = clampCm(cm, beadSpec.diameterMm)
           let heightCm = state.heightCm
           if (state.lockAspect && state.imageAspectRatio && state.imageAspectRatio > 0) {
-            heightCm = clampCm(calcLockedDimension(widthCm, state.imageAspectRatio))
+            heightCm = clampCm(
+              calcLockedDimension(widthCm, 1 / state.imageAspectRatio),
+              beadSpec.diameterMm
+            )
           }
           return { widthCm, heightCm }
         })
@@ -73,10 +100,14 @@ export const useHamaStore = create<HamaStore>()(
 
       setHeightCm: (cm) => {
         set((state) => {
-          const heightCm = clampCm(cm)
+          const beadSpec = BEAD_TYPES[state.beadTypeId] || BEAD_TYPES.midi
+          const heightCm = clampCm(cm, beadSpec.diameterMm)
           let widthCm = state.widthCm
           if (state.lockAspect && state.imageAspectRatio && state.imageAspectRatio > 0) {
-            widthCm = clampCm(calcLockedDimension(heightCm, 1 / state.imageAspectRatio))
+            widthCm = clampCm(
+              calcLockedDimension(heightCm, state.imageAspectRatio),
+              beadSpec.diameterMm
+            )
           }
           return { widthCm, heightCm }
         })

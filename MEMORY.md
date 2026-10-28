@@ -23,12 +23,14 @@
   1. **Contraste de texto:** El color del código numérico ahora se calcula exclusivamente por `color.luminance > 0.5` → `#000000` / `#ffffff`. No depende de `darkMode`.
   2. **Visibilidad a zoom bajo:** Eliminado el guard `cellSize >= 18`; los códigos se muestran siempre que `showCodes` esté activo. Tamaño de fuente: `Math.max(8, Math.floor(cellSize * 0.45))`.
   3. **Solapamiento de códigos:** En modo `hollow` con `showCodes=true` se omite el hueco interior; `fillText` siempre es la última instrucción de cada celda.
-- **Paleta y cuantización cromática refinada (2026-10-28):**
+- **Paleta, cuantización cromática y escalado adaptativo (2026-10-28):**
   - Paleta Hama Beads Midi oficial de 46 colores con `HamaColor` normalizado (`hex`, `r`, `g`, `b`, `rgb`).
-  - Colores ancla: `#18` Negro (`#000000`, `[0, 0, 0]`) y `#01` Blanco (`#ffffff`, `[255, 255, 255]`).
-  - Siluetas y entintado: píxeles de contorno/cavidades con luminancia < 0.22 y sat < 20 colapsan a `#18` Negro, eliminando halos grises.
-  - Fidelidad cromática: restricción a escala de grises reducida a sat < 8; con sat >= 8 y canal dominante se penalizan grises neutros y se pondera la coherencia del tono (Hue), mapeando a azul/cian (#119, #46, #49, #08) en vez de gris (#17, #71).
-  - Resultado: 46/46 tests unitarios en verde, 0 errores TS, 0 warnings ESLint, build exitoso.
+  - Colores ancla: `#18` Negro (`#000000`) y `#01` Blanco (`#ffffff`).
+  - Cuantización: contornos/sombras < 0.22 a `#18` sin halos; tonos cromáticos respetados con `sat >= 8` y Hue weighting.
+  - Escalado adaptativo inteligente: al cargar imagen se calcula su ratio real (`width / height`) y la dimensión mayor cubre 1 placa estándar (~14.5 cm en Midi, ~7 cm en Mini) con `lockAspect: true`, impidiendo deformaciones.
+  - Límites mínimos viables: mínimo de 12 perlas (`getMinCm = Math.max(4.0, 12 * diameterMm / 10)`), impidiendo rejillas 8x8.
+  - UX: alerta sutil de baja resolución si algún eje tiene < 16 perlas.
+  - Resultado: 49/49 tests en verde, 0 errores TS, 0 warnings ESLint, build exitoso.
 
 ## Próximos Pasos
 - Spec 001 completada y todos los bugs post-validación corregidos. Pendiente: definir Spec 002 (visor 3D / Scene3D con Three.js).

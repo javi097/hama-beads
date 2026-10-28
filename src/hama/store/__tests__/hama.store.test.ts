@@ -54,19 +54,37 @@ describe('hama.store', () => {
   })
 
   it('setWidthCm actualiza heightCm proporcionalmente si lockAspect es true y hay aspectRatio', () => {
-    useHamaStore.getState().setImageSrc('data:image/png;base64,mock', 0.5) // height = 0.5 * width
-    useHamaStore.getState().setWidthCm(10)
+    // aspectRatio = width / height = 2 (ancho = 2 * alto)
+    useHamaStore.getState().setImageSrc('data:image/png;base64,mock', 2)
+    useHamaStore.getState().setWidthCm(16)
 
-    expect(useHamaStore.getState().widthCm).toBe(10)
-    expect(useHamaStore.getState().heightCm).toBe(5)
+    expect(useHamaStore.getState().widthCm).toBe(16)
+    expect(useHamaStore.getState().heightCm).toBe(8)
   })
 
   it('setHeightCm actualiza widthCm proporcionalmente si lockAspect es true y hay aspectRatio', () => {
-    useHamaStore.getState().setImageSrc('data:image/png;base64,mock', 2) // height = 2 * width (aspectRatio = height/width = 2)
-    useHamaStore.getState().setHeightCm(10)
+    // aspectRatio = width / height = 0.5 (alto = 2 * ancho)
+    useHamaStore.getState().setImageSrc('data:image/png;base64,mock', 0.5)
+    useHamaStore.getState().setHeightCm(16)
 
-    expect(useHamaStore.getState().heightCm).toBe(10)
-    expect(useHamaStore.getState().widthCm).toBe(5)
+    expect(useHamaStore.getState().heightCm).toBe(16)
+    expect(useHamaStore.getState().widthCm).toBe(8)
+  })
+
+  it('setImageSrc calcula dimensiones adaptativas cubriendo 1 placa estándar en la dimensión mayor', () => {
+    // Vertical (Hollow Knight, portrait ratio 0.5 en Midi 5 mm): alto = 14.5 cm (29 cuentas), ancho proporcional
+    useHamaStore.getState().setImageSrc('data:image/png;base64,mock', 0.5)
+    const state = useHamaStore.getState()
+    expect(state.heightCm).toBe(14.5)
+    expect(state.widthCm).toBe(7.3)
+    expect(state.lockAspect).toBe(true)
+
+    // Apaisada (ratio 2.0 en Midi 5 mm): ancho = 14.5 cm, alto proporcional
+    useHamaStore.getState().setImageSrc('data:image/png;base64,mock', 2.0)
+    const state2 = useHamaStore.getState()
+    expect(state2.widthCm).toBe(14.5)
+    expect(state2.heightCm).toBe(7.3)
+    expect(state2.lockAspect).toBe(true)
   })
 
   it('setHighlightedColorId hace toggle al recibir el mismo id', () => {
@@ -94,10 +112,11 @@ describe('hama.store', () => {
     expect(useHamaStore.getState().zoom).toBe(1.5)
   })
 
-  it('clampCm se aplica al ancho y al alto respetando límites de 4 a 100 cm', () => {
+  it('clampCm se aplica al ancho y al alto respetando límites según diámetro de perla', () => {
     useHamaStore.setState({ lockAspect: false })
     useHamaStore.getState().setWidthCm(2)
-    expect(useHamaStore.getState().widthCm).toBe(4)
+    // En Midi (5.0 mm), el mínimo viable es 6.0 cm (12 cuentas)
+    expect(useHamaStore.getState().widthCm).toBe(6)
 
     useHamaStore.getState().setHeightCm(150)
     expect(useHamaStore.getState().heightCm).toBe(100)

@@ -1,6 +1,6 @@
 import { useHamaStore } from '@/hama/store/hama.store'
 import { BEAD_TYPES } from '@/hama/core/palette.const'
-import { calcBeadCount } from '@/hama/core/grid-calculator'
+import { calcBeadCount, getMinCm } from '@/hama/core/grid-calculator'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -20,6 +20,8 @@ export default function DimensionInputs({ className }: Props) {
   const beadSpec = BEAD_TYPES[beadTypeId]
   const cols = calcBeadCount(widthCm, beadSpec.diameterMm)
   const rows = calcBeadCount(heightCm, beadSpec.diameterMm)
+  const minCm = getMinCm(beadSpec.diameterMm)
+  const isLowResolution = cols < 16 || rows < 16
 
   return (
     <div
@@ -41,7 +43,7 @@ export default function DimensionInputs({ className }: Props) {
             id="dimension-width"
             type="number"
             step="0.5"
-            min="4"
+            min={minCm}
             max="100"
             value={widthCm}
             onChange={(e) => setWidthCm(Number(e.target.value))}
@@ -78,7 +80,7 @@ export default function DimensionInputs({ className }: Props) {
             id="dimension-height"
             type="number"
             step="0.5"
-            min="4"
+            min={minCm}
             max="100"
             value={heightCm}
             onChange={(e) => setHeightCm(Number(e.target.value))}
@@ -97,6 +99,13 @@ export default function DimensionInputs({ className }: Props) {
           ({widthCm} cm × {heightCm} cm)
         </span>
       </div>
+
+      {/* Alerta de baja resolución (menos de 16 perlas en algún eje) */}
+      {isLowResolution && (
+        <div className="w-full mt-2 pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+          <span>⚠️ Resolución baja: detalles pequeños pueden simplificarse</span>
+        </div>
+      )}
     </div>
   )
 }

@@ -44,7 +44,7 @@ export function useImageLoader(): UseImageLoaderReturn {
 
         const img = new Image()
         img.onload = () => {
-          const ratio = img.naturalWidth > 0 ? img.naturalHeight / img.naturalWidth : 1
+          const ratio = img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 1
           setImageSrc(dataUrl, ratio)
         }
         img.onerror = () => {
