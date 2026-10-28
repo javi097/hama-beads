@@ -8,9 +8,11 @@ describe('inventory / deriveColorInventory', () => {
     // Cuadrícula 2x2:
     // [Rojo #05, Blanco #01]
     // [Rojo #05, null]
+    const rojo = HAMA_PALETTE.find((c) => c.id === '05')!
+    const blanco = HAMA_PALETTE.find((c) => c.id === '01')!
     const cells: BeadCell[][] = [
-      [HAMA_PALETTE[4], HAMA_PALETTE[0]], // Rojo, Blanco
-      [HAMA_PALETTE[4], null], // Rojo, Vacío
+      [rojo, blanco], // Rojo, Blanco
+      [rojo, null],   // Rojo, Vacío
     ]
 
     const inventory = deriveColorInventory(cells)

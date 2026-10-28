@@ -1,60 +1,98 @@
+/**
+ * Paleta oficial Hama Beads Midi — 46 colores
+ * Fuente: https://myblockstudio.com/es/colors.php (sección Hama Beads)
+ * Generado automáticamente — no editar manualmente los valores HEX/RGB/luminance.
+ *
+ * id        : código numérico oficial con padding de 2 dígitos mínimo (ej. "01", "07", "104")
+ * name      : nombre oficial del color en español
+ * hex       : código hexadecimal exacto (#RRGGBB)
+ * r, g, b   : componentes RGB [0-255] derivadas del hex
+ * luminance : luminancia perceptual (0.299*r + 0.587*g + 0.114*b) / 255 ∈ [0, 1]
+ */
+
 import type { BeadType, HamaColor } from '@/interfaces/hama.interface'
 
-interface RawHamaColor {
-  id: string
-  name: string
-  hex: string
+export type { BeadType }
+export type BeadColor = HamaColor
+
+/** Convierte un hex #RRGGBB en componentes r, g, b */
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const n = parseInt(hex.slice(1), 16)
+  return { r: (n >> 16) & 0xff, g: (n >> 8) & 0xff, b: n & 0xff }
 }
 
-const RAW_HAMA_PALETTE: readonly RawHamaColor[] = [
-  { id: '01', name: 'Blanco (White)', hex: '#FFFFFF' },
-  { id: '02', name: 'Crema (Cream)', hex: '#F3E5AB' },
-  { id: '03', name: 'Amarillo (Yellow)', hex: '#F7D000' },
-  { id: '04', name: 'Naranja (Orange)', hex: '#E85D04' },
-  { id: '05', name: 'Rojo (Red)', hex: '#D90429' },
-  { id: '06', name: 'Rosa (Pink)', hex: '#F472B6' },
-  { id: '07', name: 'Morado (Purple)', hex: '#7209B7' },
-  { id: '08', name: 'Azul (Blue)', hex: '#1D4ED8' },
-  { id: '09', name: 'Azul Claro (Light Blue)', hex: '#38BDF8' },
-  { id: '10', name: 'Verde (Green)', hex: '#15803D' },
-  { id: '11', name: 'Verde Claro (Light Green)', hex: '#4ADE80' },
-  { id: '12', name: 'Marrón (Brown)', hex: '#5C3D2E' },
-  { id: '17', name: 'Gris (Grey)', hex: '#94A3B8' },
-  { id: '18', name: 'Negro (Black)', hex: '#111827' },
-  { id: '20', name: 'Marrón Rojizo (Reddish Brown)', hex: '#8B4513' },
-  { id: '21', name: 'Marrón Claro (Light Brown)', hex: '#C49A6C' },
-  { id: '22', name: 'Rojo Oscuro (Dark Red)', hex: '#800020' },
-  { id: '26', name: 'Piel / Carne (Flesh)', hex: '#FFDBAC' },
-  { id: '27', name: 'Beige (Beige)', hex: '#E3C29B' },
-  { id: '28', name: 'Verde Oliva (Olive Green)', hex: '#556B2F' },
-  { id: '29', name: 'Rojo Vino (Wine Red)', hex: '#581845' },
-  { id: '30', name: 'Burdeos (Burgundy)', hex: '#4A0E17' },
-  { id: '43', name: 'Amarillo Pastel (Pastel Yellow)', hex: '#FEF08A' },
-  { id: '44', name: 'Rojo Pastel (Pastel Red)', hex: '#FCA5A5' },
-  { id: '45', name: 'Morado Pastel (Pastel Purple)', hex: '#DDD6FE' },
-  { id: '46', name: 'Azul Pastel (Pastel Blue)', hex: '#BAE6FD' },
-  { id: '47', name: 'Verde Pastel (Pastel Green)', hex: '#BBF7D0' },
-  { id: '48', name: 'Rosa Pastel (Pastel Pink)', hex: '#FBCFE8' },
-  { id: '70', name: 'Gris Claro (Light Grey)', hex: '#CBD5E1' },
-  { id: '71', name: 'Gris Oscuro (Dark Grey)', hex: '#475569' },
-]
+/** Luminancia perceptual estándar ∈ [0, 1] */
+function calcLuminance(r: number, g: number, b: number): number {
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255
+}
 
-export const HAMA_PALETTE: HamaColor[] = RAW_HAMA_PALETTE.map((c) => {
-  const hex = c.hex.replace('#', '')
-  const r = parseInt(hex.substring(0, 2), 16)
-  const g = parseInt(hex.substring(2, 4), 16)
-  const b = parseInt(hex.substring(4, 6), 16)
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+/** Construye un HamaColor a partir de id, name y hex */
+function bead(id: string, name: string, hex: string): HamaColor {
+  const { r, g, b } = hexToRgb(hex)
   return {
-    id: c.id,
-    name: c.name,
-    hex: c.hex,
+    id,
+    name,
+    hex,
     r,
     g,
     b,
-    luminance,
+    rgb: [r, g, b],
+    luminance: calcLuminance(r, g, b),
   }
-})
+}
+
+export const HAMA_PALETTE: HamaColor[] = [
+  bead('01',  'Blanco',          '#ffffff'),
+  bead('02',  'Crema',           '#F6E7C1'),
+  bead('03',  'Amarillo',        '#FBE122'),
+  bead('05',  'Rojo',            '#E1141C'),
+  bead('06',  'Rosa',            '#F7A8C4'),
+  bead('07',  'Morado',          '#7B3F98'),
+  bead('08',  'Cobalto',         '#1C3F94'),
+  bead('10',  'Verde oscuro',    '#0A7C3E'),
+  bead('11',  'Verde claro',     '#A8DCA0'),
+  bead('12',  'Marrón oscuro',   '#4A3122'),
+  bead('17',  'Gris',            '#8A8C8E'),
+  bead('18',  'Negro',           '#000000'),
+  bead('20',  'Óxido',           '#9C4A24'),
+  bead('21',  'Marrón claro',    '#B5835A'),
+  bead('26',  'Salmón',          '#FF8C7A'),
+  bead('27',  'Piel',            '#FBD0A8'),
+  bead('31',  'Turquesa',        '#00A99D'),
+  bead('32',  'Rosa neón',       '#FF4FA3'),
+  bead('34',  'Amarillo neón',   '#EAFF00'),
+  bead('37',  'Verde neón',      '#5CFF5C'),
+  bead('38',  'Naranja neón',    '#FF7A00'),
+  bead('43',  'Amarillo pastel', '#F6EFA6'),
+  bead('44',  'Coral intenso',   '#F15F5A'),
+  bead('46',  'Azul pastel',     '#A4D4E6'),
+  bead('47',  'Verde pastel',    '#BFE6B3'),
+  bead('49',  'Celeste',         '#5BC2D6'),
+  bead('60',  'Caramelo',        '#F0A93B'),
+  bead('61',  'Dorado',          '#C9A227'),
+  bead('62',  'Plateado',        '#C0C0C4'),
+  bead('64',  'Blanco perla',    '#F4F1EA'),
+  bead('71',  'Gris oscuro',     '#58595B'),
+  bead('75',  'Canela',          '#D9B380'),
+  bead('76',  'Jengibre',        '#7C4A1E'),
+  bead('77',  'Gris claro',      '#CFCFCF'),
+  bead('78',  'Melocotón',       '#FCD5B5'),
+  bead('79',  'Naranja',         '#F36F21'),
+  bead('82',  'Ciruela',         '#6C3082'),
+  bead('98',  'Menta',           '#8FD9C0'),
+  bead('104', 'Lima kiwi',       '#C7E94F'),
+  bead('106', 'Lavanda pastel',  '#CBB7E0'),
+  bead('107', 'Lavanda',         '#B3A0D4'),
+  bead('112', 'Rubor',           '#F4B9C2'),
+  bead('115', 'Verde brillante', '#8DC63F'),
+  bead('116', 'Azul marino',     '#16224A'),
+  bead('118', 'Baya',            '#8C2A4A'),
+  bead('119', 'Azul',            '#1B75BB'),
+]
+
+// ---------------------------------------------------------------------------
+// Tipos de tablero Hama Beads
+// ---------------------------------------------------------------------------
 
 export const BEAD_TYPES: Record<'mini' | 'midi' | 'maxi', BeadType> = {
   mini: {

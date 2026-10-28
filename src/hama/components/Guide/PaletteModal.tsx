@@ -47,7 +47,7 @@ export default function PaletteModal({ isOpen, onClose }: Props) {
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-900/50">
           <div>
             <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-              Paleta Oficial Hama Beads Midi (30 Colores)
+              Paleta Oficial Hama Beads Midi ({HAMA_PALETTE.length} Colores)
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Activa o desactiva los colores disponibles en tu inventario ({enabledColorIds.length}/{HAMA_PALETTE.length})
@@ -70,7 +70,7 @@ export default function PaletteModal({ isOpen, onClose }: Props) {
             onClick={handleSelectAll}
             className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition cursor-pointer"
           >
-            Seleccionar Todos (30)
+            Seleccionar Todos ({HAMA_PALETTE.length})
           </button>
           <button
             type="button"
@@ -81,7 +81,7 @@ export default function PaletteModal({ isOpen, onClose }: Props) {
           </button>
         </div>
 
-        {/* Rejilla de los 30 colores */}
+        {/* Rejilla de colores de la paleta */}
         <div className="p-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
           {HAMA_PALETTE.map((color) => {
             const isChecked = enabledColorIds.includes(color.id)

@@ -20,9 +20,15 @@
 
 ## Correcciones Post-Validación
 - **Bug fix renderizado 2D (2026-10-28):** Corregidos dos bugs en `src/hama/hooks/useCanvasRenderer.ts`:
-  1. **Contraste de texto:** El color del código numérico ahora se calcula exclusivamente por `color.luminance > 0.5` → `#000000` / `#ffffff`. Umbral anterior era 0.55 y el color oscuro era `#0f172a` (no puro). No depende de `darkMode`.
-  2. **Visibilidad a zoom bajo:** Eliminado el guard `cellSize >= 18`; los códigos se muestran siempre que `showCodes` esté activo. Tamaño de fuente: `Math.max(8, Math.floor(cellSize * 0.45))` (antes era `Math.max(9, Math.floor(cellSize * 0.34))`).
-  - Resultado: 0 errores TypeScript, 0 advertencias ESLint, 41/41 tests en verde.
+  1. **Contraste de texto:** El color del código numérico ahora se calcula exclusivamente por `color.luminance > 0.5` → `#000000` / `#ffffff`. No depende de `darkMode`.
+  2. **Visibilidad a zoom bajo:** Eliminado el guard `cellSize >= 18`; los códigos se muestran siempre que `showCodes` esté activo. Tamaño de fuente: `Math.max(8, Math.floor(cellSize * 0.45))`.
+  3. **Solapamiento de códigos:** En modo `hollow` con `showCodes=true` se omite el hueco interior; `fillText` siempre es la última instrucción de cada celda.
+- **Paleta y cuantización cromática refinada (2026-10-28):**
+  - Paleta Hama Beads Midi oficial de 46 colores con `HamaColor` normalizado (`hex`, `r`, `g`, `b`, `rgb`).
+  - Colores ancla: `#18` Negro (`#000000`, `[0, 0, 0]`) y `#01` Blanco (`#ffffff`, `[255, 255, 255]`).
+  - Siluetas y entintado: píxeles de contorno/cavidades con luminancia < 0.22 y sat < 20 colapsan a `#18` Negro, eliminando halos grises.
+  - Fidelidad cromática: restricción a escala de grises reducida a sat < 8; con sat >= 8 y canal dominante se penalizan grises neutros y se pondera la coherencia del tono (Hue), mapeando a azul/cian (#119, #46, #49, #08) en vez de gris (#17, #71).
+  - Resultado: 46/46 tests unitarios en verde, 0 errores TS, 0 warnings ESLint, build exitoso.
 
 ## Próximos Pasos
 - Spec 001 completada y todos los bugs post-validación corregidos. Pendiente: definir Spec 002 (visor 3D / Scene3D con Three.js).

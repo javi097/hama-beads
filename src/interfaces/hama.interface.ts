@@ -5,6 +5,7 @@ export interface HamaColor {
   r: number
   g: number
   b: number
+  rgb: [number, number, number]
   luminance: number
 }
 

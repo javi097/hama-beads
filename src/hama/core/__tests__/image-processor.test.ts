@@ -41,8 +41,8 @@ describe('image-processor', () => {
       217, 4, 41, 255,
       // (1,0) Blanco
       255, 255, 255, 255,
-      // (0,1) Negro
-      17, 24, 39, 255,
+      // (0,1) Negro (5,5,5 cae claramente en #18 con la paleta actual)
+      5, 5, 5, 255,
       // (1,1) Transparente
       0, 0, 0, 50,
     ])
@@ -87,6 +87,7 @@ describe('image-processor', () => {
     // La celda transparente debe ser null
     expect(result.cells[1][1]).toBeNull()
     // Las otras celdas deben tener color Hama asignado
+    // RGB (217,4,41) → Rojo #05; RGB (17,24,39) → Negro #18
     expect(result.cells[0][0]?.id).toBe('05') // Rojo
     expect(result.cells[1][0]?.id).toBe('18') // Negro
   })
