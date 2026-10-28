@@ -31,7 +31,7 @@
   - Añadir pruebas unitarias en `src/hama/store/__tests__/hama.store.test.ts`.
   - Hecho cuando: `npm test` pasa en verde confirmando la inmutabilidad de las mutaciones de configuración 3D y su persistencia.
 
-- [ ] **T6. Hook de renderizado WebGL con Three.js e InstancedMesh.** RF-5
+- [x] **T6. Hook de renderizado WebGL con Three.js e InstancedMesh.** RF-5
   - Crear `src/hama/hooks/useThreeScene.ts` para instanciar `WebGLRenderer`, `Scene`, `PerspectiveCamera`, `OrbitControls` y mallas instanciadas (`InstancedMesh`) agrupadas por color Hama para alto rendimiento (60 FPS con $10.000$ perlas).
   - Implementar la traslación de la vista explosionada (0 a 50 mm) mediante actualización dinámica de matrices de instancia (`setMatrixAt`).
   - Implementar el filtrado de capa/placa activa para aislamiento visual y el ciclo de vida defensivo con liberación de GPU (`dispose()`).
