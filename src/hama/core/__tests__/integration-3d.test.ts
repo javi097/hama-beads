@@ -123,14 +123,14 @@ describe('Spec 002 — End-to-End 3D Studio Integration', () => {
       diameterMm,
     })!
 
-    expect(model.plates).toHaveLength(2)
+    expect(model.plates).toHaveLength(6)
 
     const allCells = model.plates!.flatMap((p) => p.cells)
     const inventory = deriveColorInventory(allCells)
     expect(inventory.total).toBe(model.totalBeads)
 
     const steps = deriveAssemblySteps(model)
-    expect(steps).toHaveLength(2)
+    expect(steps).toHaveLength(6)
 
     const pdf = buildAssemblyManualPdf({
       projectName: 'Test Box Integration',
@@ -141,7 +141,7 @@ describe('Spec 002 — End-to-End 3D Studio Integration', () => {
       coverPreviewDataUrl: '',
     })
 
-    expect(pdf.getNumberOfPages()).toBe(3) // 1 Portada + 2 Placas
+    expect(pdf.getNumberOfPages()).toBe(7) // 1 Portada + 6 Placas
   })
 
   it('Modo 3: Flujo completo de Relieve -> Inventario 3D -> Pasos -> PDF', () => {

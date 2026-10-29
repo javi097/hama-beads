@@ -78,7 +78,7 @@ describe('pdf-exporter — buildAssemblyManualPdf', () => {
     expect(doc.getNumberOfPages()).toBe(4)
   })
 
-  it('compone correctamente un manual para Ensamblado Interlocking (2 placas)', () => {
+  it('compone correctamente un manual para Ensamblado Interlocking (6 placas)', () => {
     const grid = createSolidGrid(4, 4, blackBead)
     const gridData: GridData = { cols: 4, rows: 4, cells: grid }
 
@@ -93,7 +93,7 @@ describe('pdf-exporter — buildAssemblyManualPdf', () => {
     })!
 
     const steps = deriveAssemblySteps(model3D)
-    expect(steps).toHaveLength(2)
+    expect(steps).toHaveLength(6)
 
     const options: PdfExportOptions = {
       projectName: 'Caja Interlocking',
@@ -106,8 +106,8 @@ describe('pdf-exporter — buildAssemblyManualPdf', () => {
 
     const doc = buildAssemblyManualPdf(options)
 
-    // Portada (1) + 2 placas = 3 páginas en total
-    expect(doc.getNumberOfPages()).toBe(3)
+    // Portada (1) + 6 placas = 7 páginas en total
+    expect(doc.getNumberOfPages()).toBe(7)
   })
 
   it('maneja pasos vacíos o modelos sin perlas generando al menos la portada sin fallos', () => {

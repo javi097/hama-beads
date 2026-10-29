@@ -17,7 +17,7 @@ export default function DimensionInputs({ className }: Props) {
   const setHeightCm = useHamaStore((state) => state.setHeightCm)
   const setLockAspect = useHamaStore((state) => state.setLockAspect)
 
-  const beadSpec = BEAD_TYPES[beadTypeId]
+  const beadSpec = BEAD_TYPES[beadTypeId] || BEAD_TYPES.midi
   const cols = calcBeadCount(widthCm, beadSpec.diameterMm)
   const rows = calcBeadCount(heightCm, beadSpec.diameterMm)
   const minCm = getMinCm(beadSpec.diameterMm)

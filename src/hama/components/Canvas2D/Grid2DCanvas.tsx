@@ -24,7 +24,7 @@ export default function Grid2DCanvas({ className, darkMode = true }: Props) {
   const setZoom = useHamaStore((state) => state.setZoom)
   const setHighlightedColorId = useHamaStore((state) => state.setHighlightedColorId)
 
-  const beadType = BEAD_TYPES[beadTypeId]
+  const beadType = BEAD_TYPES[beadTypeId] || BEAD_TYPES.midi
 
   // Hook que redibuja el canvas con compensación DPR en cada actualización
   useCanvasRenderer(canvasRef, gridData, {

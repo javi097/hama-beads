@@ -44,7 +44,7 @@ describe('hama.store', () => {
       mode3d: 'hollow',
       hollowLayersCount: 5,
       hollowWallThickness: 1,
-      interlockingType: 'box',
+      interlockingType: 'cross_ribs',
       interlockingDepthBeads: 5,
       reliefLevels: 3,
       explodedGapMm: 0,

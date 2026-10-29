@@ -13,6 +13,7 @@ export interface BeadInstance {
   dirX: number
   dirY: number
   dirZ: number
+  orientation?: 'xy' | 'yz' | 'xz'
 }
 
 export interface UseThreeSceneOptions {
@@ -66,20 +67,42 @@ export function extractBeadInstances(
     })
   } else if (model.mode === 'interlocking') {
     const plates = model.plates || []
+    const xyPlates = plates.filter((p) => p.orientation === 'xy' && p.id.startsWith('layer_'))
+    const zMid = (xyPlates.length - 1) / 2
+
     plates.forEach((plate, plateIdx) => {
       const layerIndex = plateIdx + 1
       let dirX = 0
       let dirY = 0
       let dirZ = 0
 
-      if (plate.id === 'front') dirZ = 1
+      if (plate.orientation === 'xy' && plate.id.startsWith('layer_')) {
+        const zIdx = Math.round(plate.position3D[2] / diameterMm)
+        dirZ = zIdx - zMid
+        dirX = 0
+        dirY = 0
+      } else if (plate.id.startsWith('spine')) {
+        dirX = 0
+        dirY = 0
+        dirZ = 0
+      } else if (plate.id === 'main') {
+        dirX = 0
+        dirY = 0
+        dirZ = 1 // Placa decorativa frontal se desplaza hacia +Z en vista explosionada
+      } else if (plate.id === 'rib_1') {
+        dirX = -1 // Costilla 1 se desplaza hacia la izquierda (-X)
+        dirY = 0
+        dirZ = 0
+      } else if (plate.id === 'rib_2') {
+        dirX = 1 // Costilla 2 se desplaza hacia la derecha (+X)
+        dirY = 0
+        dirZ = 0
+      } else if (plate.id === 'front') dirZ = 1
       else if (plate.id === 'back') dirZ = -1
       else if (plate.id === 'left') dirX = -1
       else if (plate.id === 'right') dirX = 1
       else if (plate.id === 'top') dirY = 1
       else if (plate.id === 'bottom') dirY = -1
-      else if (plate.id === 'rib_1') dirZ = 1
-      else if (plate.id === 'rib_2') dirZ = -1
       else if (plate.id === 'profile') dirX = 1
 
       const [posX, posY, posZ] = plate.position3D
@@ -116,6 +139,7 @@ export function extractBeadInstances(
               dirX,
               dirY,
               dirZ,
+              orientation: plate.orientation,
             })
           }
         }
@@ -193,6 +217,16 @@ export function calcInstanceMatrix(
 
   dummyObject.position.set(posX, posY, posZ)
   dummyObject.scale.set(scale, scale, scale)
+
+  // Alinear la rotación del cilindro según la normal geométrica del plano de la placa
+  if (bead.orientation === 'yz') {
+    dummyObject.rotation.set(0, Math.PI / 2, 0)
+  } else if (bead.orientation === 'xz') {
+    dummyObject.rotation.set(Math.PI / 2, 0, 0)
+  } else {
+    dummyObject.rotation.set(0, 0, 0)
+  }
+
   dummyObject.updateMatrix()
 
   dummyMatrix.copy(dummyObject.matrix)

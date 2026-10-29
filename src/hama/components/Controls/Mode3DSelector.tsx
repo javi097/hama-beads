@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useHamaStore } from '@/hama/store/hama.store'
 import type { Mode3DType } from '@/interfaces/hama-3d.interface'
 import { cn } from '@/lib/utils'
@@ -23,8 +24,8 @@ const MODES: ModeOption[] = [
   {
     id: 'interlocking',
     title: 'Interlocking 90°',
-    subtitle: 'Placas machihembradas sin adhesivo',
-    badge: 'Cajas',
+    subtitle: 'Costillas con peana o caja machihembrada',
+    badge: 'Ensamblado',
   },
   {
     id: 'relief',
@@ -52,6 +53,21 @@ export default function Mode3DSelector({ className }: Props) {
 
   const reliefLevels = useHamaStore((state) => state.reliefLevels)
   const setReliefLevels = useHamaStore((state) => state.setReliefLevels)
+
+  const gridData = useHamaStore((state) => state.gridData)
+
+  const isIrregularFigure = useMemo(() => {
+    if (!gridData || !gridData.cells || gridData.cells.length === 0) return false
+    const total = gridData.rows * gridData.cols
+    if (total === 0) return false
+    let nullCount = 0
+    for (const row of gridData.cells) {
+      for (const cell of row) {
+        if (cell === null) nullCount++
+      }
+    }
+    return nullCount / total > 0.08
+  }, [gridData])
 
   return (
     <div
@@ -182,7 +198,7 @@ export default function Mode3DSelector({ className }: Props) {
                     : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                 )}
               >
-                Estructura Cruzada (2 placas)
+                Caja 3D (6 placas)
               </button>
               <button
                 type="button"
@@ -194,9 +210,14 @@ export default function Mode3DSelector({ className }: Props) {
                     : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                 )}
               >
-                Costillas Soporte
+                Ensamblaje Lego (Eje Interno)
               </button>
             </div>
+            {interlockingType === 'box' && isIrregularFigure && (
+              <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-md p-2 leading-relaxed">
+                💡 <strong>Sugerencia:</strong> Este diseño contiene fondo transparente. Para figuras recortadas (personajes o siluetas) se recomienda <strong>Ensamblaje Lego (Eje Interno)</strong>. El modo <strong>Caja 3D</strong> está pensado para objetos prismáticos (cofres, cubos o dados).
+              </p>
+            )}
           </div>
 
           <div>

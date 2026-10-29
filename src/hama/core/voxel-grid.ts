@@ -231,12 +231,135 @@ export function computeDistanceTransform2D(baseGrid: BeadCell[][]): {
 }
 
 /**
+ * Síntesis de Volumen 3D Redondeado (Revolución / Inflado Elipsoidal por Fila).
+ *
+ * A partir de una imagen/diseño 2D en baseGrid, reconstruye un volumen 3D completo en 360°:
+ * - En cada fila y, identifica los segmentos horizontales continuos de perlas [xStart, xEnd].
+ * - Para cada segmento de ancho W = xEnd - xStart + 1 y centro xCenter = (xStart + xEnd) / 2:
+ *   * Rx = W / 2
+ *   * Rz = (W / maxWidth) * (depth / 2)
+ *   * Vóxel (x, y, z) pertenece al volumen si ((x - xCenter) / Rx)^2 + ((z - zCenter) / Rz)^2 <= 1.0
+ *   * El color hereda baseGrid[y][x], proyectando los colores del arte alrededor de la figura.
+ *
+ * El resultado es una escultura 3D redondeada (por ejemplo, sombrero esférico y tallo cilíndrico en la seta).
+ *
+ * @param baseGrid Cuadrícula bidimensional 2D
+ * @param depth Profundidad total en capas Z (acotada a [1, 30])
+ * @param diameterMm Diámetro de la perla en milímetros
+ */
+export function synthesizeRoundedVolume(
+  baseGrid: BeadCell[][],
+  depth: number,
+  diameterMm = 5.0
+): VoxelGrid3D {
+  const rows = baseGrid.length
+  if (rows === 0) return createEmptyVoxelGrid(0, 0, 0, diameterMm)
+  const cols = baseGrid[0].length
+  if (cols === 0) return createEmptyVoxelGrid(0, 0, 0, diameterMm)
+
+  const safeDepth = Math.max(1, Math.min(30, Math.round(depth)))
+  const grid = createEmptyVoxelGrid(cols, rows, safeDepth, diameterMm)
+
+  // 1. Identificar segmentos horizontales continuos y calcular maxWidth global
+  interface Segment {
+    xStart: number
+    xEnd: number
+    width: number
+    xCenter: number
+  }
+
+  const rowSegments: Segment[][] = []
+  let maxWidth = 0
+
+  for (let y = 0; y < rows; y++) {
+    const segments: Segment[] = []
+    let inSeg = false
+    let startX = 0
+
+    for (let x = 0; x < cols; x++) {
+      if (baseGrid[y][x] !== null) {
+        if (!inSeg) {
+          inSeg = true
+          startX = x
+        }
+      } else {
+        if (inSeg) {
+          const w = x - startX
+          segments.push({
+            xStart: startX,
+            xEnd: x - 1,
+            width: w,
+            xCenter: (startX + x - 1) / 2,
+          })
+          if (w > maxWidth) maxWidth = w
+          inSeg = false
+        }
+      }
+    }
+    if (inSeg) {
+      const w = cols - startX
+      segments.push({
+        xStart: startX,
+        xEnd: cols - 1,
+        width: w,
+        xCenter: (startX + cols - 1) / 2,
+      })
+      if (w > maxWidth) maxWidth = w
+    }
+    rowSegments.push(segments)
+  }
+
+  if (maxWidth === 0) {
+    return grid
+  }
+
+  const zCenter = (safeDepth - 1) / 2
+  const maxRz = safeDepth / 2
+
+  // 2. Evaluar para cada vóxel si cae dentro de la sección elipsoidal de su segmento
+  for (let z = 0; z < safeDepth; z++) {
+    const isCentralZ = Math.abs(z - zCenter) < 0.6 // Capa central coronal conserva 100% el diseño original 2D
+
+    for (let y = 0; y < rows; y++) {
+      const segments = rowSegments[y]
+      if (segments.length === 0) continue
+
+      for (const seg of segments) {
+        const Rx = Math.max(0.5, seg.width / 2)
+        const Rz = Math.max(0.5, (seg.width / maxWidth) * maxRz)
+
+        for (let x = seg.xStart; x <= seg.xEnd; x++) {
+          const dx = (x - seg.xCenter) / Rx
+          const dz = (z - zCenter) / Rz
+          const distSq = dx * dx + dz * dz
+
+          // En la capa central se incluye siempre todo el segmento;
+          // en las demás capas se comprueba la sección elipsoidal
+          if (isCentralZ || distSq <= 1.001) {
+            const bead = baseGrid[y][x]
+            if (bead !== null) {
+              grid.voxels[z][y][x] = {
+                x,
+                y,
+                z,
+                color: bead,
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return grid
+}
+
+/**
  * Realiza la extrusión tridimensional a partir de una cuadrícula base 2D.
  *
  * - Perfil 'prismatic' (por defecto): Extrusión ortogonal uniforme. Cada capa Z contiene
  *   exactamente la silueta y colores de la cuadrícula 2D. Ideal para prismas, cámaras, cajas y maquetas.
- * - Perfil 'rounded': Inflado morfológico elipsoidal suave en Z, respetando un espesor
- *   mínimo de pared para evitar el colapso de los bordes.
+ * - Perfil 'rounded': Síntesis elipsoidal redondeada en 360° por fila (Revolución / Inflado morfológico).
  *
  * @param baseGrid Cuadrícula bidimensional de diseño 2D (BeadCell[][])
  * @param options Opciones de extrusión (depth, profile, diameterMm, minWallThickness)
@@ -253,79 +376,28 @@ export function extrudeFrom2D(
   const depth = Math.max(1, Math.round(options.depth))
   const diameterMm = options.diameterMm ?? 5.0
   const profile = options.profile ?? 'prismatic'
-  const minWallThickness = options.minWallThickness ?? 1
+
+  if (profile === 'rounded') {
+    return synthesizeRoundedVolume(baseGrid, depth, diameterMm)
+  }
 
   const grid = createEmptyVoxelGrid(cols, rows, depth, diameterMm)
 
-  if (profile === 'prismatic') {
-    for (let z = 0; z < depth; z++) {
-      for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
-          const bead = baseGrid[y][x]
-          if (bead !== null) {
-            grid.voxels[z][y][x] = {
-              x,
-              y,
-              z,
-              color: bead,
-            }
-          }
-        }
-      }
-    }
-    return grid
-  }
-
-  // Perfil 'rounded': contracción morfológica suave hacia las tapas
-  const { distMap, maxDist } = computeDistanceTransform2D(baseGrid)
-  const kMid = (depth - 1) / 2
-
   for (let z = 0; z < depth; z++) {
-    const u = kMid > 0 ? Math.abs(z - kMid) / kMid : 0
-    // Curva elipsoidal: threshold = 0 en el centro z=kMid, aumentando hacia 1 en las tapas
-    const rawThreshold = 1.0 - Math.sqrt(Math.max(0, 1.0 - u * u * 0.75))
-    // Acotar threshold para asegurar que las tapas conserven al menos minWallThickness
-    const maxAllowedThreshold = maxDist > 0 ? Math.max(0, (maxDist - minWallThickness) / maxDist) : 0
-    const threshold = Math.min(rawThreshold, maxAllowedThreshold)
-
-    let layerBeadCount = 0
-
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
         const bead = baseGrid[y][x]
-        if (bead === null) continue
-
-        const normDist = maxDist > 0 ? distMap[y][x] / maxDist : 1.0
-        if (normDist >= threshold) {
+        if (bead !== null) {
           grid.voxels[z][y][x] = {
             x,
             y,
             z,
             color: bead,
           }
-          layerBeadCount++
-        }
-      }
-    }
-
-    // Salvaguarda: si la capa quedó vacía (figura muy pequeña), mantener al menos las perlas centrales
-    if (layerBeadCount === 0) {
-      for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
-          const bead = baseGrid[y][x]
-          if (bead !== null && distMap[y][x] === maxDist) {
-            grid.voxels[z][y][x] = {
-              x,
-              y,
-              z,
-              color: bead,
-            }
-          }
         }
       }
     }
   }
-
   return grid
 }
 

@@ -323,155 +323,210 @@ describe('voxelizer — Hollow Slicing (Modo 1)', () => {
       expect(generateInterlockingPlates([], 'cross_ribs', 5, 5.0)).toEqual([])
     })
 
-    describe('Estructura Cruzada (structureType === "box")', () => {
-      it('genera exactamente 2 placas ortogonales cruzadas (front y profile)', () => {
+    describe('Caja 3D (structureType === "box")', () => {
+      it('genera exactamente 6 placas ortogonales independientes (front, back, left, right, top, bottom)', () => {
         const grid = createSolidGrid(5, 5, redBead)
         const plates = generateInterlockingPlates(grid, 'box', 4, 5.0)
 
-        expect(plates).toHaveLength(2)
+        expect(plates).toHaveLength(6)
         const plateIds = plates.map((p) => p.id)
-        expect(plateIds).toEqual(['front', 'profile'])
+        expect(plateIds).toEqual(['front', 'back', 'left', 'right', 'top', 'bottom'])
 
         const front = plates.find((p) => p.id === 'front')!
-        const profile = plates.find((p) => p.id === 'profile')!
+        const back = plates.find((p) => p.id === 'back')!
+        const left = plates.find((p) => p.id === 'left')!
+        const right = plates.find((p) => p.id === 'right')!
+        const top = plates.find((p) => p.id === 'top')!
+        const bottom = plates.find((p) => p.id === 'bottom')!
 
         expect(front.orientation).toBe('xy')
-        expect(profile.orientation).toBe('yz')
+        expect(back.orientation).toBe('xy')
+        expect(left.orientation).toBe('yz')
+        expect(right.orientation).toBe('yz')
+        expect(top.orientation).toBe('xz')
+        expect(bottom.orientation).toBe('xz')
 
         // Dimensiones: W=5, H=5, D=4
         expect(front.widthBeads).toBe(5)
         expect(front.heightBeads).toBe(5)
-        expect(front.cells).toHaveLength(5)
-        expect(front.cells[0]).toHaveLength(5)
+        expect(back.widthBeads).toBe(5)
+        expect(back.heightBeads).toBe(5)
 
-        expect(profile.widthBeads).toBe(4)
-        expect(profile.heightBeads).toBe(5)
-        expect(profile.cells).toHaveLength(5)
-        expect(profile.cells[0]).toHaveLength(4)
+        expect(left.widthBeads).toBe(4)
+        expect(left.heightBeads).toBe(5)
+        expect(right.widthBeads).toBe(4)
+        expect(right.heightBeads).toBe(5)
+
+        expect(top.widthBeads).toBe(5)
+        expect(top.heightBeads).toBe(4)
+        expect(bottom.widthBeads).toBe(5)
+        expect(bottom.heightBeads).toBe(4)
       })
 
-      it('emplea blanco (#01) como color estructural para la placa de perfil (peana)', () => {
+      it('emplea blanco (#01) como color estructural para las placas de la caja', () => {
         const grid = createSolidGrid(4, 4, blackBead)
         const plates = generateInterlockingPlates(grid, 'box', 3, 5.0)
 
-        const profile = plates.find((p) => p.id === 'profile')!
-        const profileBeads = profile.cells.flat().filter((c) => c !== null)
-        expect(profileBeads.length).toBeGreaterThan(0)
-        // La placa de perfil estructural debe ser blanca (#01), no negra (#18)
-        expect(profileBeads[0]!.id).toBe('01')
+        const left = plates.find((p) => p.id === 'left')!
+        const leftBeads = left.cells.flat().filter((c) => c !== null)
+        expect(leftBeads.length).toBeGreaterThan(0)
+        // La placa estructural debe ser blanca (#01), no negra (#18)
+        expect(leftBeads[0]!.id).toBe('01')
       })
 
       it('acota depthBeads a un mínimo de 3 y máximo de 30', () => {
         const grid = createSolidGrid(4, 4)
         const platesLow = generateInterlockingPlates(grid, 'box', 1, 5.0)
-        const profileLow = platesLow.find((p) => p.id === 'profile')!
-        expect(profileLow.widthBeads).toBe(3)
+        const leftLow = platesLow.find((p) => p.id === 'left')!
+        expect(leftLow.widthBeads).toBe(3)
 
         const platesHigh = generateInterlockingPlates(grid, 'box', 50, 5.0)
-        const profileHigh = platesHigh.find((p) => p.id === 'profile')!
-        expect(profileHigh.widthBeads).toBe(30)
+        const leftHigh = platesHigh.find((p) => p.id === 'left')!
+        expect(leftHigh.widthBeads).toBe(30)
       })
 
-      it('las ranuras a media altura de la placa frontal y de perfil encajan a media madera sin colisión', () => {
-        const grid = createSolidGrid(6, 6, redBead)
+      it('juntas machihembradas con paso de 2 perlas (10 mm) encajan en todas las aristas sin colisión volumétrica', () => {
+        const cols = 6
+        const rows = 6
         const depth = 4
-        const plates = generateInterlockingPlates(grid, 'box', depth, 5.0)
+        const grid = createSolidGrid(cols, rows, redBead)
+        const plates = generateInterlockingPlates(grid, 'box', depth, 5.0, 2)
 
+        // Comprobar arista vertical Frontal con Lateral Izquierda (x = 0, z = depth - 1)
         const front = plates.find((p) => p.id === 'front')!
-        const profile = plates.find((p) => p.id === 'profile')!
+        const left = plates.find((p) => p.id === 'left')!
 
-        const xCross = Math.round(profile.position3D[0] / 5.0)
-        const zSlot = Math.round(front.position3D[2] / 5.0)
+        for (let y = 0; y < rows; y++) {
+          const frontHasBead = front.cells[y][0] !== null
+          const leftHasBead = left.cells[y][depth - 1] !== null
 
-        // En la línea de intersección, ninguna celda colisiona
-        for (let y = 0; y < 6; y++) {
-          const frontHasBead = front.cells[y][xCross] !== null
-          const profileHasBead = profile.cells[y][zSlot] !== null
-
-          // No colisionan ambas a la vez en la línea de inserción central
-          expect(frontHasBead && profileHasBead).toBe(false)
+          // No colisionan ambas a la vez en la arista compartida
+          expect(frontHasBead && leftHasBead).toBe(false)
+          // Y al menos una tiene material (contacto continuo)
+          expect(frontHasBead || leftHasBead).toBe(true)
         }
+
+        // Comprobar paso de 2 perlas: Front tiene dientes en y=0,1; Left tiene dientes en y=2,3
+        expect(front.cells[0][0]).not.toBeNull()
+        expect(front.cells[1][0]).not.toBeNull()
+        expect(left.cells[2][depth - 1]).not.toBeNull()
+        expect(left.cells[3][depth - 1]).not.toBeNull()
       })
 
-      it('en figuras recortadas con fondo transparente, la placa Frontal sigue estrictamente la silueta sin inflar el BOM', () => {
-        // Cuadrícula 10x10 donde la figura solo ocupa una región central 4x4
-        const grid: BeadCell[][] = Array.from({ length: 10 }, (_, y) =>
-          Array.from({ length: 10 }, (_, x) => {
-            if (y >= 3 && y <= 6 && x >= 3 && x <= 6) {
-              return redBead
-            }
-            return null
-          })
-        )
+      it('en la posición final ensamblada, ningún vóxel de la superficie de la caja colisiona entre placas', () => {
+        const cols = 5
+        const rows = 5
+        const depth = 4
+        const grid = createSolidGrid(cols, rows, redBead)
+        const plates = generateInterlockingPlates(grid, 'box', depth, 5.0, 2)
 
-        const plates = generateInterlockingPlates(grid, 'box', 4, 5.0)
-        const front = plates.find((p) => p.id === 'front')!
+        // Matriz de ocupación 3D para registrar propietarios
+        const occupancy: Map<string, string> = new Map()
 
-        // Celdas fuera del rango de la silueta [3..6, 3..6] deben ser estrictamente null
-        for (let y = 0; y < 10; y++) {
-          for (let x = 0; x < 10; x++) {
-            if (y < 3 || y > 6 || x < 3 || x > 6) {
-              expect(front.cells[y][x]).toBeNull()
+        for (const plate of plates) {
+          const [posX, posY, posZ] = plate.position3D
+          const d = 5.0
+
+          for (let r = 0; r < plate.cells.length; r++) {
+            for (let c = 0; c < plate.cells[r].length; c++) {
+              if (plate.cells[r][c] !== null) {
+                let x = 0
+                let y = 0
+                let z = 0
+
+                if (plate.orientation === 'xy') {
+                  x = Math.round((posX + (c + 0.5) * d - 0.5 * d) / d)
+                  y = Math.round(-(posY - (r + 0.5) * d + 0.5 * d) / d)
+                  z = Math.round((posZ + 0.5 * d - 0.5 * d) / d)
+                } else if (plate.orientation === 'yz') {
+                  x = Math.round((posX + 0.5 * d - 0.5 * d) / d)
+                  y = Math.round(-(posY - (r + 0.5) * d + 0.5 * d) / d)
+                  z = Math.round((posZ + (c + 0.5) * d - 0.5 * d) / d)
+                } else if (plate.orientation === 'xz') {
+                  x = Math.round((posX + (c + 0.5) * d - 0.5 * d) / d)
+                  y = Math.round(-(posY - 0.5 * d + 0.5 * d) / d)
+                  z = Math.round((posZ + (r + 0.5) * d - 0.5 * d) / d)
+                }
+
+                const key = `${x},${y},${z}`
+                // Ningún vóxel debe haber sido reclamado previamente por otra placa
+                expect(occupancy.has(key)).toBe(false)
+                occupancy.set(key, plate.id)
+              }
             }
           }
         }
 
-        // El recuento total de perlas en frontal no excede las 16 perlas del diseño original
-        const frontBeadCount = front.cells.flat().filter((c) => c !== null).length
-        expect(frontBeadCount).toBeLessThanOrEqual(16)
-        expect(frontBeadCount).toBeGreaterThan(0)
+        // Se han ocupado exactamente los vóxeles de la superficie de la caja
+        expect(occupancy.size).toBeGreaterThan(0)
       })
     })
 
-    describe('Figura con costillas ortogonales (structureType === "cross_ribs")', () => {
-      it('genera la placa central y al menos dos costillas transversales', () => {
+    describe('Ensamblaje Modular Tipo Lego (structureType === "cross_ribs")', () => {
+      it('genera todas las capas del cuerpo redondeado en Z más la columna vertebral interna de encastre', () => {
         const grid = createSolidGrid(7, 6, blackBead)
-        const plates = generateInterlockingPlates(grid, 'cross_ribs', 5, 5.0)
+        const depth = 5
+        const plates = generateInterlockingPlates(grid, 'cross_ribs', depth, 5.0)
 
-        expect(plates).toHaveLength(3)
-        const [main, rib1, rib2] = plates
+        // 5 capas del cuerpo ('xy') + 1 columna vertebral interna ('yz') = 6 placas
+        expect(plates).toHaveLength(6)
 
-        expect(main.id).toBe('main')
-        expect(main.orientation).toBe('xy')
-        expect(main.widthBeads).toBe(7)
-        expect(main.heightBeads).toBe(6)
+        const bodyPlates = plates.filter((p) => p.orientation === 'xy')
+        expect(bodyPlates).toHaveLength(5)
+        bodyPlates.forEach((layer, idx) => {
+          expect(layer.id).toBe(`layer_${idx + 1}`)
+          expect(layer.widthBeads).toBe(7)
+          expect(layer.heightBeads).toBe(6)
+        })
 
-        expect(rib1.id).toBe('rib_1')
-        expect(rib1.orientation).toBe('yz')
-        expect(rib1.widthBeads).toBe(5)
-        expect(rib1.heightBeads).toBe(6)
-
-        expect(rib2.id).toBe('rib_2')
-        expect(rib2.orientation).toBe('yz')
-        expect(rib2.widthBeads).toBe(5)
-        expect(rib2.heightBeads).toBe(6)
+        const spine = plates.find((p) => p.id === 'spine_1')!
+        expect(spine).toBeDefined()
+        expect(spine.orientation).toBe('yz')
+        expect(spine.widthBeads).toBe(5)
+        expect(spine.heightBeads).toBe(6)
       })
 
-      it('las ranuras de inserción en la figura y en las costillas encajan a media altura sin colisión', () => {
+      it('las ranuras de inserción en las capas y los dientes de la columna vertebral encajan sin colisión volumétrica', () => {
         const grid = createSolidGrid(7, 6, redBead)
         const depth = 5
         const plates = generateInterlockingPlates(grid, 'cross_ribs', depth, 5.0)
 
-        const main = plates.find((p) => p.id === 'main')!
-        const rib1 = plates.find((p) => p.id === 'rib_1')!
-        const zSlot = Math.floor(depth / 2)
-        const rib1X = Math.max(1, Math.floor(7 / 3))
+        // Comprobar que en la posición 3D no hay colisiones entre las capas del cuerpo y la columna
+        const occupancy = new Set<string>()
 
-        // A lo largo de la columna rib1X:
-        // En la mitad superior (y < 3): main tiene perla, rib1 tiene hueco (null)
-        // En la mitad inferior (y >= 3): main tiene hueco (null), rib1 tiene perla
-        for (let y = 0; y < 6; y++) {
-          const mainHasBead = main.cells[y][rib1X] !== null
-          const ribHasBead = rib1.cells[y][zSlot] !== null
+        for (const plate of plates) {
+          const [posX, posY, posZ] = plate.position3D
+          const d = 5.0
 
-          // Nunca colisionan en la línea de inserción
-          expect(mainHasBead && ribHasBead).toBe(false)
-          // Y al menos una tiene material (ensamblado continuo)
-          expect(mainHasBead || ribHasBead).toBe(true)
+          for (let r = 0; r < plate.cells.length; r++) {
+            for (let c = 0; c < plate.cells[r].length; c++) {
+              if (plate.cells[r][c] !== null) {
+                let x = 0
+                let y = 0
+                let z = 0
+
+                if (plate.orientation === 'xy') {
+                  x = Math.round((posX + (c + 0.5) * d - 0.5 * d) / d)
+                  y = Math.round(-(posY - (r + 0.5) * d + 0.5 * d) / d)
+                  z = Math.round((posZ + 0.5 * d - 0.5 * d) / d)
+                } else if (plate.orientation === 'yz') {
+                  x = Math.round((posX + 0.5 * d - 0.5 * d) / d)
+                  y = Math.round(-(posY - (r + 0.5) * d + 0.5 * d) / d)
+                  z = Math.round((posZ + (c + 0.5) * d - 0.5 * d) / d)
+                }
+
+                const key = `${x},${y},${z}`
+                expect(occupancy.has(key)).toBe(false)
+                occupancy.add(key)
+              }
+            }
+          }
         }
+
+        expect(occupancy.size).toBeGreaterThan(0)
       })
 
-      it('en figuras recortadas con fondo transparente, las costillas son peanas continuas sin fragmentos sueltos', () => {
+      it('en figuras recortadas con fondo transparente, la columna vertebral queda estrictamente dentro de la silueta sin sobresalir', () => {
         // Cuadrícula 10x10 con figura solo en filas 3 a 7 y cols 2 a 8
         const grid: BeadCell[][] = Array.from({ length: 10 }, (_, y) =>
           Array.from({ length: 10 }, (_, x) => {
@@ -483,21 +538,16 @@ describe('voxelizer — Hollow Slicing (Modo 1)', () => {
         )
 
         const plates = generateInterlockingPlates(grid, 'cross_ribs', 4, 5.0)
-        const rib1 = plates.find((p) => p.id === 'rib_1')!
+        const spine = plates.find((p) => p.id === 'spine_1')!
+        expect(spine).toBeDefined()
 
-        // Filas fuera del rango vertical [3, 7] no deben tener perlas
+        // Filas fuera del rango vertical [3, 7] no deben tener perlas en la columna vertebral
         for (let y = 0; y < 10; y++) {
           if (y < 3 || y > 7) {
             for (let z = 0; z < 4; z++) {
-              expect(rib1.cells[y][z]).toBeNull()
+              expect(spine.cells[y][z]).toBeNull()
             }
           }
-        }
-
-        // Filas dentro del rango [3, 7]: las alas de sustentación son sólidas y continuas
-        for (let y = 3; y <= 7; y++) {
-          expect(rib1.cells[y][0]).not.toBeNull()
-          expect(rib1.cells[y][3]).not.toBeNull()
         }
       })
     })
@@ -621,7 +671,7 @@ describe('voxelizer — Hollow Slicing (Modo 1)', () => {
 
       expect(res).not.toBeNull()
       expect(res?.mode).toBe('interlocking')
-      expect(res?.plates).toHaveLength(2)
+      expect(res?.plates).toHaveLength(6)
       expect(res?.dimensionsMm).toEqual({ x: 20, y: 20, z: 20 })
       expect(res?.totalBeads).toBeGreaterThan(0)
     })

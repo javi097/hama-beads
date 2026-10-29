@@ -2,25 +2,19 @@
 
 ## Estado del Proyecto
 - Inicializado proyecto con Vite + React + TypeScript + Tailwind CSS con alias `@/*`.
-- **136/136 tests en verde (`npm test`), compilación estricta (`npx tsc --noEmit`), linter limpio (`npm run lint`) y build verificado.**
+- **146/146 tests en verde (`npm test`), compilación estricta (`npx tsc --noEmit`), linter limpio (`npm run lint`) y build verificado.**
 - Visor WebGL Three.js con InstancedMesh, despiece con vista explosionada, 3 modos volumétricos, selector 2D/3D reactivo y exportador PDF.
-- **Rediseño Motor 3D — Fases 1 y 2 Completadas:**
-  1. *Fase 1:* Infraestructura canónica `VoxelGrid3D` en `src/hama/core/voxel-grid.ts` y contratos en `src/interfaces/hama-3d.interface.ts`.
-  2. *Fase 2:* Rediseño de `generateHollowLayers` en `src/hama/core/voxelizer.ts` con tapas sólidas al 100% (RF-2.2), soporte para cavidades selectivas (cuerpo macizo vs. cavidad hueca) y garantía de soporte vertical anti-perlas flotantes (`ensureVerticalSupport`).
+- **Arquitectura Volumétrica 3D Redondeada (Revolución Elipsoidal en 360°):**
+  1. *Síntesis Volumétrica Pura (`synthesizeRoundedVolume`):* Inflado elipsoidal continuo por segmentos horizontales en cada fila $y$. $R_x = W/2$, $R_z = (W/W_{\max}) \times (depth/2)$. Produce sombrero esférico en cúpula y tallo cilíndrico en la seta sin deformaciones.
+  2. *Modo Apilado Hueco (`hollow`):* Escultura 3D redondeada completa con vaciado perimétrico interior (1 o 2 perlas) para máximo ahorro de material y pegado capa a capa.
+  3. *Modo Interlocking Lego (`cross_ribs`):* Genera TODAS las capas que conforman la escultura redondeada 3D en $Z$, vaciadas interiormente, con orificio de encastre estandarizado en el núcleo. Incluye la Columna Conectora Interna (Eje Lego en YZ) oculta dentro de la figura con dientes de trabado mecánico sin pegamento ni elementos sobresalientes.
+  4. *Vista Explosionada:* Con `gap = 0`, ambos modos muestran la escultura 3D completa y redondeada; con `gap > 0`, las capas se separan simétricamente en $Z$ revelando el eje conector interno.
 
 ## Decisiones Técnicas y Arquitectura 3D
 - **Representación Canónica Única:** `VoxelGrid3D` desacopla la generación de volumen del slicing de fabricación.
-- **Apilado Hueco Inteligente:**
-  - Perfil `'prismatic'` por defecto (reproduce fielmente la silueta 2D) y `'rounded'` morfológico opcional.
-  - Base ($Z=1$) y tapa ($Z=N$) sólidas completas (RF-2.2).
-  - Vaciado selectivo por IDs de color o componente conexa; o vaciado estándar con muro perimetral continuo de 1 o 2 perlas.
-  - `ensureVerticalSupport` previene islas flotantes proyectando soporte vertical hacia abajo.
-- **Interlocking (Fase 3 prevista):** Paso de machihembrado de 2 perlas (10 mm) para tolerancia térmica de planchado y resistencia física; selector Caja 3D (6 placas) y Costillas Silueteadas con peana.
+- **Interlocking Real:** Cero colisiones volumétricas en 3D (`occupancy.has(key) === false`), cero perlas fuera de la silueta redondeada y 100% de coherencia entre Three.js, inventario BOM y pasos de montaje PDF.
 
 ## Errores a Evitar
-- No deformar modelos planos/mecánicos con elipsoides forzados: perfil prismático por defecto.
-- No vaciar indiscriminadamente todo el objeto cuando se requieran cavidades selectivas.
-- No dejar perlas superiores flotando en el aire sin soporte inferior o planar.
-
-## Próximos Pasos
-- **Fase 3:** Rediseñar el motor de Interlocking en `voxelizer.ts` implementando la Caja 3D real de 6 placas machihembradas (paso 2 perlas) y las Costillas Silueteadas con peana sin fractura de piezas.
+- Prohibido generar aletas planas aisladas o cajas rectangulares genéricas para figuras recortadas.
+- La columna vertebral interna debe permanecer estrictamente confinada dentro de la cavidad hueca.
+- Slicing simétrico y coherente en $Z$: las capas del cuerpo son planos XY que se desplazan simétricamente en la vista explosionada.

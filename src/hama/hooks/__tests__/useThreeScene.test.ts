@@ -84,12 +84,48 @@ describe('useThreeScene — Core 3D Geometry and GPU Lifecycle', () => {
         expect(b.dirY).toBe(0)
       })
 
-      // Placa de perfil debe proyectar hacia +X
-      const profileBeads = instances.filter((b) => b.layerIndex === 2)
-      expect(profileBeads.length).toBeGreaterThan(0)
-      profileBeads.forEach((b) => {
+      // Trasera debe proyectar hacia -Z
+      const backBeads = instances.filter((b) => b.layerIndex === 2)
+      expect(backBeads.length).toBeGreaterThan(0)
+      backBeads.forEach((b) => {
+        expect(b.dirZ).toBe(-1)
+        expect(b.dirX).toBe(0)
+        expect(b.dirY).toBe(0)
+      })
+
+      // Lateral Izquierda debe proyectar hacia -X
+      const leftBeads = instances.filter((b) => b.layerIndex === 3)
+      expect(leftBeads.length).toBeGreaterThan(0)
+      leftBeads.forEach((b) => {
+        expect(b.dirX).toBe(-1)
+        expect(b.dirY).toBe(0)
+        expect(b.dirZ).toBe(0)
+      })
+
+      // Lateral Derecha debe proyectar hacia +X
+      const rightBeads = instances.filter((b) => b.layerIndex === 4)
+      expect(rightBeads.length).toBeGreaterThan(0)
+      rightBeads.forEach((b) => {
         expect(b.dirX).toBe(1)
         expect(b.dirY).toBe(0)
+        expect(b.dirZ).toBe(0)
+      })
+
+      // Tapa Superior debe proyectar hacia +Y
+      const topBeads = instances.filter((b) => b.layerIndex === 5)
+      expect(topBeads.length).toBeGreaterThan(0)
+      topBeads.forEach((b) => {
+        expect(b.dirY).toBe(1)
+        expect(b.dirX).toBe(0)
+        expect(b.dirZ).toBe(0)
+      })
+
+      // Base Inferior debe proyectar hacia -Y
+      const bottomBeads = instances.filter((b) => b.layerIndex === 6)
+      expect(bottomBeads.length).toBeGreaterThan(0)
+      bottomBeads.forEach((b) => {
+        expect(b.dirY).toBe(-1)
+        expect(b.dirX).toBe(0)
         expect(b.dirZ).toBe(0)
       })
     })

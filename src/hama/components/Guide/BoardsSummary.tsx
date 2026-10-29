@@ -21,7 +21,7 @@ export default function BoardsSummary({
   const beadTypeId = useHamaStore((state) => state.beadTypeId)
   const gridData = useHamaStore((state) => state.gridData)
 
-  const beadType = BEAD_TYPES[beadTypeId]
+  const beadType = BEAD_TYPES[beadTypeId] || BEAD_TYPES.midi
 
   const boards = useMemo(() => {
     return calcBoardsLayout(
