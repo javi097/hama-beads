@@ -231,6 +231,117 @@ export function computeDistanceTransform2D(baseGrid: BeadCell[][]): {
 }
 
 /**
+ * Determina el color del vóxel aplicando la regla de asimetría cromática Frontal vs. Dorsal:
+ *
+ * 1. Cara Frontal (z >= zCenter):
+ *    - Conserva exactamente el color baseGrid[y][x] para que los ojos, boca y detalles
+ *      faciales frontales se vean perfectamente nítidos y reconocibles de frente.
+ *
+ * 2. Lados y Espalda (z < zCenter, mitad trasera de la figura):
+ *    - Detecta el "Color Base de Relleno" (el color predominante no-borde del segmento,
+ *      ej. el melocotón/piel en el tallo de la seta o el blanco en la cabeza de un personaje).
+ *    - Si baseGrid[y][x] es un rasgo facial interno pequeño (ej. un ojo negro de 1-2 perlas
+ *      en medio de la cara o tallo), en la mitad trasera se sustituye por el Color Base de Relleno.
+ *    - Los bordes exteriores (x === xStart || x === xEnd) conservan su color (ej. borde negro)
+ *      en 360° para mantener la silueta exterior nítida.
+ *    - Los rasgos grandes y claros (como las manchas blancas del sombrero) se mantienen.
+ *
+ * @param baseGrid Cuadrícula 2D
+ * @param y Fila
+ * @param x Columna
+ * @param z Capa Z actual
+ * @param zCenter Centro geométrico en Z ((depth - 1) / 2)
+ * @param xStart Columna de inicio del segmento horizontal
+ * @param xEnd Columna de fin del segmento horizontal
+ */
+export function resolveVoxelColor(
+  baseGrid: BeadCell[][],
+  y: number,
+  x: number,
+  z: number,
+  zCenter: number,
+  xStart: number,
+  xEnd: number
+): BeadCell | null {
+  const currentBead = baseGrid[y]?.[x] ?? null
+  if (!currentBead) return null
+
+  // 1. Cara Frontal (z >= zCenter): conserva fielmente el color del diseño 2D
+  if (z >= zCenter) {
+    return currentBead
+  }
+
+  // 2. Bordes exteriores de la silueta en X (x === xStart || x === xEnd):
+  // Conservan el contorno exterior en 360° para definir la silueta
+  if (x === xStart || x === xEnd) {
+    return currentBead
+  }
+
+  // 3. Cara Posterior (z < zCenter): detectar Color Base de Relleno del segmento
+  const colorCounts = new Map<string, { count: number; bead: BeadCell }>()
+  for (let c = xStart + 1; c < xEnd; c++) {
+    const b = baseGrid[y][c]
+    if (b !== null) {
+      const entry = colorCounts.get(b.id)
+      if (entry) {
+        entry.count++
+      } else {
+        colorCounts.set(b.id, { count: 1, bead: b })
+      }
+    }
+  }
+
+  if (colorCounts.size === 0) {
+    return currentBead
+  }
+
+  // Priorizar colores no negros (#18) como color base de relleno si existen
+  const nonBlackCandidates = Array.from(colorCounts.values()).filter(
+    (c) => c.bead.id !== '18'
+  )
+  const sortedCandidates = (
+    nonBlackCandidates.length > 0 ? nonBlackCandidates : Array.from(colorCounts.values())
+  ).sort((a, b) => b.count - a.count)
+
+  const fillColor = sortedCandidates[0].bead
+
+  // Si ya tiene el color de relleno, retornar
+  if (currentBead.id === fillColor.id) {
+    return currentBead
+  }
+
+  // 4. Comprobar si currentBead es un rasgo facial interno pequeño (ej. ojo negro)
+  let left = x
+  while (left >= xStart && baseGrid[y][left]?.id === currentBead.id) {
+    left--
+  }
+  let right = x
+  while (right <= xEnd && baseGrid[y][right]?.id === currentBead.id) {
+    right++
+  }
+  const runWidth = (right - 1) - (left + 1) + 1
+
+  // Criterio de rasgo facial / ojo:
+  // - Color negro (#18) o sustancialmente más oscuro que el color de relleno
+  // - Anchura reducida (<= 3 perlas de ancho)
+  const isDarkFeature =
+    currentBead.id === '18' ||
+    currentBead.id === '71' ||
+    currentBead.id === '12' ||
+    currentBead.luminance < fillColor.luminance - 0.2
+
+  const isSmallFeature = runWidth <= 3 && runWidth < (xEnd - xStart + 1) * 0.5
+
+  if (isDarkFeature && isSmallFeature) {
+    // Sustituir por el color base de relleno en la espalda/nuca
+    return fillColor
+  }
+
+  // De lo contrario (ej. manchas blancas en el sombrero de la seta), mantener el color original
+  return currentBead
+}
+
+/**
  * Síntesis de Volumen 3D Redondeado (Revolución / Inflado Elipsoidal por Fila).
  *
  * A partir de una imagen/diseño 2D en baseGrid, reconstruye un volumen 3D completo en 360°:
@@ -336,7 +447,15 @@ export function synthesizeRoundedVolume(
           // En la capa central se incluye siempre todo el segmento;
           // en las demás capas se comprueba la sección elipsoidal
           if (isCentralZ || distSq <= 1.001) {
-            const bead = baseGrid[y][x]
+            const bead = resolveVoxelColor(
+              baseGrid,
+              y,
+              x,
+              z,
+              zCenter,
+              seg.xStart,
+              seg.xEnd
+            )
             if (bead !== null) {
               grid.voxels[z][y][x] = {
                 x,

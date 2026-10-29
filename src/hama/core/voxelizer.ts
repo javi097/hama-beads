@@ -12,6 +12,7 @@ import { HAMA_PALETTE } from './palette.const'
 import {
   extrudeFrom2D,
   synthesizeRoundedVolume,
+  resolveVoxelColor,
   createCavityMaskByColor,
   createCavityMaskBySeed,
   applyCavity,
@@ -19,6 +20,8 @@ import {
   setVoxel,
   ensureVerticalSupport,
 } from './voxel-grid'
+
+export { resolveVoxelColor }
 
 /**
  * Identifica las celdas interiores de una cuadrícula de perlas mediante erosión morfológica

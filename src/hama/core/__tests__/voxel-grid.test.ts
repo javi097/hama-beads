@@ -19,6 +19,8 @@ import {
   extractZSlice,
   sliceGridToLayers,
   extractSlicePlane,
+  resolveVoxelColor,
+  synthesizeRoundedVolume,
 } from '../voxel-grid'
 import { HAMA_PALETTE } from '../palette.const'
 import type { BeadCell } from '@/interfaces/hama.interface'
@@ -390,6 +392,88 @@ describe('VoxelGrid3D — Fase 1: Infraestructura Canónica', () => {
       expect(sliceXZ).toHaveLength(5)
       expect(sliceXZ[0]).toHaveLength(3)
       expect(sliceXZ[3][1]).toEqual(blueBead)
+    })
+  })
+
+  describe('Asimetría Cromática Frontal vs. Dorsal (Ojos y Rasgos Faciales)', () => {
+    const peachBead = HAMA_PALETTE.find((c) => c.id === '78')! // Melocotón / Piel
+    const whiteBead = HAMA_PALETTE.find((c) => c.id === '01')! // Blanco
+
+    // Fila representativa de cara o tallo: Borde Negro - Piel - Ojo Negro - Piel - Borde Negro
+    // Índices: 0=Null, 1=Negro (xStart), 2=Piel, 3=Negro (Ojo), 4=Piel, 5=Piel, 6=Negro (xEnd), 7=Null
+    const createFaceRow = (): BeadCell[][] => {
+      const row: (BeadCell | null)[] = [
+        null,
+        blackBead, // 1 (xStart)
+        peachBead, // 2
+        blackBead, // 3 (Ojo)
+        peachBead, // 4
+        peachBead, // 5
+        blackBead, // 6 (xEnd)
+        null,
+      ]
+      return [row as BeadCell[]]
+    }
+
+    it('en la cara frontal (z >= zCenter), el ojo conserva exactamente el color negro original', () => {
+      const grid = createFaceRow()
+      const zCenter = 2.0 // depth = 5
+      const eyeColor = resolveVoxelColor(grid, 0, 3, 3, zCenter, 1, 6)
+      expect(eyeColor?.id).toBe('18') // Sigue siendo negro en el frontal
+    })
+
+    it('en la cara dorsal (z < zCenter), el ojo se sustituye por el color base de relleno (piel/melocotón)', () => {
+      const grid = createFaceRow()
+      const zCenter = 2.0 // depth = 5
+      const backHeadColor = resolveVoxelColor(grid, 0, 3, 0, zCenter, 1, 6)
+      expect(backHeadColor?.id).toBe('78') // Se convierte en piel/melocotón en la nuca
+    })
+
+    it('los bordes exteriores de la silueta (xStart y xEnd) permanecen negros en 360°', () => {
+      const grid = createFaceRow()
+      const zCenter = 2.0
+      // Borde izquierdo en la espalda
+      const leftBorderBack = resolveVoxelColor(grid, 0, 1, 0, zCenter, 1, 6)
+      expect(leftBorderBack?.id).toBe('18')
+      // Borde derecho en la espalda
+      const rightBorderBack = resolveVoxelColor(grid, 0, 6, 0, zCenter, 1, 6)
+      expect(rightBorderBack?.id).toBe('18')
+    })
+
+    it('en el sombrero, las manchas blancas grandes se conservan envolventes en 360°', () => {
+      // Fila de sombrero: Borde - Rojo - Blanco (Mancha) - Blanco - Rojo - Borde
+      const row: (BeadCell | null)[] = [
+        blackBead, // 0 (xStart)
+        redBead,   // 1
+        whiteBead, // 2 (Mancha blanca)
+        whiteBead, // 3 (Mancha blanca)
+        redBead,   // 4
+        blackBead, // 5 (xEnd)
+      ]
+      const capGrid = [row as BeadCell[]]
+      const zCenter = 2.0
+      // En la espalda (z=0), la mancha blanca no se reemplaza porque no es un rasgo oscuro facial
+      const spotBack = resolveVoxelColor(capGrid, 0, 2, 0, zCenter, 0, 5)
+      expect(spotBack?.id).toBe('01') // Sigue siendo blanco
+    })
+
+    it('synthesizeRoundedVolume integra la regla cromática eliminando los ojos de la nuca', () => {
+      const grid = createFaceRow()
+      const depth = 5
+      const volume = synthesizeRoundedVolume(grid, depth, 5.0)
+
+      const zCenter = 2
+      // En el plano frontal central Z=2, el vóxel en x=3 es negro (ojo visible)
+      expect(getVoxel(volume, 3, 0, zCenter)?.color.id).toBe('18')
+
+      // En el plano dorsal Z=1, el vóxel en x=3 es melocotón (nuca limpia)
+      expect(getVoxel(volume, 3, 0, 1)?.color.id).toBe('78')
+
+      // En el plano dorsal Z=0, si el vóxel existe por la sección elipsoidal, es melocotón
+      const voxelZ0 = getVoxel(volume, 3, 0, 0)
+      if (voxelZ0) {
+        expect(voxelZ0.color.id).toBe('78')
+      }
     })
   })
 })
