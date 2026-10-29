@@ -14,6 +14,42 @@ export interface VoxelBead {
   color: HamaColor
 }
 
+export interface VoxelCell {
+  x: number
+  y: number
+  z: number
+  color: HamaColor
+  isStructural?: boolean
+  isCavityWall?: boolean
+}
+
+export interface VoxelGrid3D {
+  cols: number // Tamaño en X (ancho en perlas)
+  rows: number // Tamaño en Y (alto en perlas)
+  depth: number // Tamaño en Z (profundidad en perlas)
+  voxels: (VoxelCell | null)[][][] // Matriz tridimensional [z][y][x]
+  diameterMm: number // Diámetro de perla en mm
+  cavityMask?: boolean[][][] // Máscara tridimensional de cavidades [z][y][x]
+}
+
+export type VolumeProfile = 'prismatic' | 'rounded'
+
+export interface ExtrusionOptions {
+  depth: number
+  profile?: VolumeProfile
+  diameterMm?: number
+  minWallThickness?: number
+}
+
+export interface CavityOptions {
+  targetColorIds?: string[]
+  seedCoords?: [number, number][]
+  zRange?: [number, number]
+  wallThickness?: 1 | 2
+  preserveCapBottom?: boolean
+  preserveCapTop?: boolean
+}
+
 export interface VoxelLayer {
   layerIndex: number
   name: string
@@ -53,7 +89,15 @@ export interface Model3DResult {
 export interface HollowConfig {
   totalLayers: number
   wallThickness: 1 | 2
+  profile?: VolumeProfile
+  cavityColorIds?: string[]
+  cavitySeedCoords?: [number, number][]
+  preserveCapBottom?: boolean
+  preserveCapTop?: boolean
+  enforceVerticalSupport?: boolean
 }
+
+export type GenerateHollowLayersOptions = Partial<Omit<HollowConfig, 'totalLayers' | 'wallThickness'>>
 
 export interface InterlockingConfig {
   structureType: InterlockingStructureType

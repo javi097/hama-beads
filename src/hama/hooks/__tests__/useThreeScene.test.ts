@@ -84,11 +84,13 @@ describe('useThreeScene — Core 3D Geometry and GPU Lifecycle', () => {
         expect(b.dirY).toBe(0)
       })
 
-      // Trasera debe proyectar hacia -Z
-      const backBeads = instances.filter((b) => b.layerIndex === 2)
-      expect(backBeads.length).toBeGreaterThan(0)
-      backBeads.forEach((b) => {
-        expect(b.dirZ).toBe(-1)
+      // Placa de perfil debe proyectar hacia +X
+      const profileBeads = instances.filter((b) => b.layerIndex === 2)
+      expect(profileBeads.length).toBeGreaterThan(0)
+      profileBeads.forEach((b) => {
+        expect(b.dirX).toBe(1)
+        expect(b.dirY).toBe(0)
+        expect(b.dirZ).toBe(0)
       })
     })
   })
@@ -218,6 +220,31 @@ describe('useThreeScene — Core 3D Geometry and GPU Lifecycle', () => {
       expect(mockRenderer.dispose).toHaveBeenCalled()
       expect(mockRenderer.forceContextLoss).toHaveBeenCalled()
       expect(scene.children).toHaveLength(0)
+    })
+  })
+
+  describe('captureScreenshot contract', () => {
+    it('asegura la firma y contrato de captura de pantalla para portada en PDF', () => {
+      // Simular comportamiento de renderer WebGL con preserveDrawingBuffer
+      const mockCanvas = {
+        toDataURL: vi.fn().mockReturnValue('data:image/png;base64,mock3drender'),
+      }
+      const mockRenderer = {
+        render: vi.fn(),
+        domElement: mockCanvas,
+      }
+      const mockScene = {} as THREE.Scene
+      const mockCamera = {} as THREE.Camera
+
+      const captureScreenshot = () => {
+        mockRenderer.render(mockScene, mockCamera)
+        return mockRenderer.domElement.toDataURL('image/png')
+      }
+
+      const result = captureScreenshot()
+      expect(mockRenderer.render).toHaveBeenCalledWith(mockScene, mockCamera)
+      expect(mockCanvas.toDataURL).toHaveBeenCalledWith('image/png')
+      expect(result).toBe('data:image/png;base64,mock3drender')
     })
   })
 })

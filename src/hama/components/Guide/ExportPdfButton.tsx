@@ -8,10 +8,15 @@ import { cn } from '@/lib/utils'
 
 interface Props {
   className?: string
+  captureScreenshot?: () => string
   getPreviewSnapshot?: () => string
 }
 
-export default function ExportPdfButton({ className, getPreviewSnapshot }: Props) {
+export default function ExportPdfButton({
+  className,
+  captureScreenshot,
+  getPreviewSnapshot,
+}: Props) {
   const [isExporting, setIsExporting] = useState(false)
 
   const gridData = useHamaStore((state) => state.gridData)
@@ -52,7 +57,28 @@ export default function ExportPdfButton({ className, getPreviewSnapshot }: Props
     setTimeout(async () => {
       try {
         const steps = deriveAssemblySteps(model3D)
-        const coverPreviewDataUrl = getPreviewSnapshot ? getPreviewSnapshot() : ''
+
+        // Obtener captura de la escena 3D activa
+        let coverPreviewDataUrl = ''
+        if (captureScreenshot) {
+          coverPreviewDataUrl = captureScreenshot()
+        } else if (getPreviewSnapshot) {
+          coverPreviewDataUrl = getPreviewSnapshot()
+        }
+
+        // Si no se proporcionó callback o devolvió cadena vacía, capturar del canvas WebGL en el DOM
+        if (!coverPreviewDataUrl && typeof document !== 'undefined') {
+          const webglCanvas = (document.querySelector('div[data-scene3d-canvas] canvas') ||
+            document.querySelector('.cursor-grab canvas') ||
+            document.querySelector('canvas[data-engine^="three.js"]')) as HTMLCanvasElement | null
+          if (webglCanvas && typeof webglCanvas.toDataURL === 'function') {
+            try {
+              coverPreviewDataUrl = webglCanvas.toDataURL('image/png')
+            } catch {
+              coverPreviewDataUrl = ''
+            }
+          }
+        }
 
         const depthCm = (model3D.dimensionsMm.z / 10).toFixed(1)
         const dimensionsCm = `${widthCm.toFixed(1)} × ${heightCm.toFixed(1)} × ${depthCm} cm`
@@ -74,6 +100,7 @@ export default function ExportPdfButton({ className, getPreviewSnapshot }: Props
   }, [
     model3D,
     isExporting,
+    captureScreenshot,
     getPreviewSnapshot,
     widthCm,
     heightCm,

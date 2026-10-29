@@ -1,17 +1,35 @@
 {
   "version": 1,
   "skills": {
+    "blender-image-to-3d": {
+      "source": "majidmanzarpour/blender-game-skills",
+      "sourceType": "github",
+      "skillPath": "skills/blender-image-to-3d/SKILL.md",
+      "computedHash": "84a836c3eed39966c1cec0b97c3239e733c65eca1b9ad2d03bbdb6f29a652d44"
+    },
     "frontend-design": {
       "source": "anthropics/skills",
       "sourceType": "github",
       "skillPath": "skills/frontend-design/SKILL.md",
       "computedHash": "106acf230014cbb43ca34e6410371321b56ca742f9ee0442e8ec05bf02eb0384"
     },
+    "scenario-meshy": {
+      "source": "scenario-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/scenario-meshy/SKILL.md",
+      "computedHash": "ef3894da78cad0860bd08eb97dc956421300c234ee7801d786f221d97500b371"
+    },
     "systematic-debugging": {
       "source": "obra/superpowers",
       "sourceType": "github",
       "skillPath": "skills/systematic-debugging/SKILL.md",
       "computedHash": "276fb0aadb002ab930cc2a56de89e16995a2e3e70b33587652bf0a5fb123148d"
+    },
+    "voxel-art": {
+      "source": "omer-metin/skills-for-antigravity",
+      "sourceType": "github",
+      "skillPath": "skills/voxel-art/SKILL.md",
+      "computedHash": "7a0a460f72869e691b2f2b4c2c7105580c51504f83ed186fa2fc95a9efef24a9"
     },
     "web-design-guidelines": {
       "source": "vercel-labs/agent-skills",

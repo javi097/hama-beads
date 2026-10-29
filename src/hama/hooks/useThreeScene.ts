@@ -26,6 +26,7 @@ export interface UseThreeSceneOptions {
 
 export interface UseThreeSceneReturn {
   resetCamera: () => void
+  captureScreenshot: () => string
   getCanvasSnapshotUrl: () => string
   isReady: boolean
 }
@@ -79,6 +80,7 @@ export function extractBeadInstances(
       else if (plate.id === 'bottom') dirY = -1
       else if (plate.id === 'rib_1') dirZ = 1
       else if (plate.id === 'rib_2') dirZ = -1
+      else if (plate.id === 'profile') dirX = 1
 
       const [posX, posY, posZ] = plate.position3D
 
@@ -93,14 +95,14 @@ export function extractBeadInstances(
             if (plate.orientation === 'xy') {
               xPos = posX + (c + 0.5) * diameterMm
               yPos = posY - (r + 0.5) * diameterMm
-              zPos = posZ
+              zPos = posZ + 0.5 * diameterMm
             } else if (plate.orientation === 'yz') {
-              xPos = posX
+              xPos = posX + 0.5 * diameterMm
               yPos = posY - (r + 0.5) * diameterMm
               zPos = posZ + (c + 0.5) * diameterMm
             } else if (plate.orientation === 'xz') {
               xPos = posX + (c + 0.5) * diameterMm
-              yPos = posY
+              yPos = posY - 0.5 * diameterMm
               zPos = posZ + (r + 0.5) * diameterMm
             }
 
@@ -465,19 +467,21 @@ export function useThreeScene({
     controls.update()
   }, [model3D])
 
-  const getCanvasSnapshotUrl = useCallback(() => {
+  const captureScreenshot = useCallback((): string => {
     const renderer = rendererRef.current
     const scene = sceneRef.current
     const camera = cameraRef.current
     if (!renderer || !scene || !camera) return ''
 
+    // Forzar el renderizado antes de la captura para asegurar que el buffer contenga el frame actualizado
     renderer.render(scene, camera)
     return renderer.domElement.toDataURL('image/png')
   }, [])
 
   return {
     resetCamera,
-    getCanvasSnapshotUrl,
+    captureScreenshot,
+    getCanvasSnapshotUrl: captureScreenshot,
     isReady,
   }
 }

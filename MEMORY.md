@@ -1,23 +1,26 @@
 # MEMORY.md — Hama Beads Studio
 
 ## Estado del Proyecto
-- Inicializado proyecto con Vite + React + TypeScript + Tailwind CSS.
-- Alias `@/*` configurado en `tsconfig.json`, `tsconfig.app.json` y `vite.config.ts`.
-- Repositorio vinculado a GitHub y despliegue continuo activo en Vercel.
-- **Spec 001 (`specs/001-core-and-2d-studio/`) 100% implementada:** 9/9 tareas, 41 tests en verde.
-- **Spec 002 (`specs/002-3d-studio-and-assembly-guide/`) 100% implementada:** 9/9 tareas, 103 tests unitarios en verde, visor WebGL Three.js con InstancedMesh, despiece con vista explosionada, 3 modos volumétricos (Apilado Hueco, Interlocking 90° y Relieve), selector 2D/3D reactivo y exportador de manual de montaje PDF en cliente con jsPDF. Build de producción verificado.
+- Inicializado proyecto con Vite + React + TypeScript + Tailwind CSS con alias `@/*`.
+- **136/136 tests en verde (`npm test`), compilación estricta (`npx tsc --noEmit`), linter limpio (`npm run lint`) y build verificado.**
+- Visor WebGL Three.js con InstancedMesh, despiece con vista explosionada, 3 modos volumétricos, selector 2D/3D reactivo y exportador PDF.
+- **Rediseño Motor 3D — Fases 1 y 2 Completadas:**
+  1. *Fase 1:* Infraestructura canónica `VoxelGrid3D` en `src/hama/core/voxel-grid.ts` y contratos en `src/interfaces/hama-3d.interface.ts`.
+  2. *Fase 2:* Rediseño de `generateHollowLayers` en `src/hama/core/voxelizer.ts` con tapas sólidas al 100% (RF-2.2), soporte para cavidades selectivas (cuerpo macizo vs. cavidad hueca) y garantía de soporte vertical anti-perlas flotantes (`ensureVerticalSupport`).
 
-## Decisiones Técnicas
-- **Estructura modular:** Dominio principal en `src/hama/` desacoplando el motor matemático (`core/`) de la presentación (`components/`, `hooks/`, `layouts/`, `pages/`).
-- **Tres tipos de perla soportados:** Mini (2,5 mm / placa 28×28), Midi (5,0 mm / placa 29×29), Maxi (10,0 mm / placa 15×15).
-- **Cuantización:** Fórmula Redmean (distancia euclidiana RGB ponderada perceptualmente). Función pura determinista.
-- **Límites de cuadrícula:** Mínimo 8 perlas/lado, máximo 120 perlas/lado. Dimensiones físicas: 4–100 cm.
-- **Eliminación de fondo (removeBg):** Activa por defecto. Solo se activa cuando el fondo muestreado en esquinas es claro (R, G, B > 240); umbral de distancia euclidiana RGB = 20.
-- **Paleta oficial:** 46 colores Hama Midi con anclas `#18` y `#01`.
-- **Visor 2D:** Canvas con compensación DPR, scroll nativo, zoom 50–300% y resalte interactivo por color.
-- **Visor 3D:** Three.js con `InstancedMesh` por color, OrbitControls, centrado geométrico, vista explosionada dinámica (0–50 mm) a 60 FPS y aislamiento por capa.
-- **Manual PDF:** jsPDF generando documento A4 vectorial multi-página en cliente con portada isométrica, tabla BOM global y desglose secuencial con cuadrículas numeradas.
-- **Zustand:** Estado global centralizado con persistencia en `localStorage` (`hama-storage`, excluyendo `imageSrc` y `gridData`).
+## Decisiones Técnicas y Arquitectura 3D
+- **Representación Canónica Única:** `VoxelGrid3D` desacopla la generación de volumen del slicing de fabricación.
+- **Apilado Hueco Inteligente:**
+  - Perfil `'prismatic'` por defecto (reproduce fielmente la silueta 2D) y `'rounded'` morfológico opcional.
+  - Base ($Z=1$) y tapa ($Z=N$) sólidas completas (RF-2.2).
+  - Vaciado selectivo por IDs de color o componente conexa; o vaciado estándar con muro perimetral continuo de 1 o 2 perlas.
+  - `ensureVerticalSupport` previene islas flotantes proyectando soporte vertical hacia abajo.
+- **Interlocking (Fase 3 prevista):** Paso de machihembrado de 2 perlas (10 mm) para tolerancia térmica de planchado y resistencia física; selector Caja 3D (6 placas) y Costillas Silueteadas con peana.
+
+## Errores a Evitar
+- No deformar modelos planos/mecánicos con elipsoides forzados: perfil prismático por defecto.
+- No vaciar indiscriminadamente todo el objeto cuando se requieran cavidades selectivas.
+- No dejar perlas superiores flotando en el aire sin soporte inferior o planar.
 
 ## Próximos Pasos
-- Todo el alcance de Spec 001 y Spec 002 completado con éxito (103/103 tests en verde, 0 errores de tipado, 0 warnings de linter, build de producción en verde). Listo para fase de validación (/sdd-validate).
+- **Fase 3:** Rediseñar el motor de Interlocking en `voxelizer.ts` implementando la Caja 3D real de 6 placas machihembradas (paso 2 perlas) y las Costillas Silueteadas con peana sin fractura de piezas.

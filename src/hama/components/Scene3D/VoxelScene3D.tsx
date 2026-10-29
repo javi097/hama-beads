@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, forwardRef, useImperativeHandle } from 'react'
 import { useHamaStore } from '@/hama/store/hama.store'
 import { BEAD_TYPES } from '@/hama/core/palette.const'
 import { computeModel3D } from '@/hama/core/voxelizer'
@@ -6,11 +6,19 @@ import { useThreeScene } from '@/hama/hooks/useThreeScene'
 import LayerStackControls from './LayerStackControls'
 import { cn } from '@/lib/utils'
 
+export interface VoxelScene3DHandle {
+  captureScreenshot: () => string
+  resetCamera: () => void
+}
+
 interface Props {
   className?: string
 }
 
-export default function VoxelScene3D({ className }: Props) {
+const VoxelScene3D = forwardRef<VoxelScene3DHandle, Props>(function VoxelScene3D(
+  { className },
+  ref
+) {
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   const gridData = useHamaStore((state) => state.gridData)
@@ -51,7 +59,7 @@ export default function VoxelScene3D({ className }: Props) {
   ])
 
   // Hook que inicializa y gestiona la escena WebGL
-  const { resetCamera } = useThreeScene({
+  const { resetCamera, captureScreenshot } = useThreeScene({
     containerRef,
     model3D,
     explodedGapMm,
@@ -60,17 +68,31 @@ export default function VoxelScene3D({ className }: Props) {
     diameterMm: beadType.diameterMm,
   })
 
+  // Exponer API imperativa para captura de portada y reencuadre
+  useImperativeHandle(
+    ref,
+    () => ({
+      captureScreenshot,
+      resetCamera,
+    }),
+    [captureScreenshot, resetCamera]
+  )
+
   const hasData = model3D !== null && model3D.totalBeads > 0
 
   return (
     <div
       className={cn(
-        'relative w-full h-full min-h-[500px] flex flex-col bg-slate-950 overflow-hidden select-none',
+        'relative w-full h-full min-h-[500px] flex-1 flex flex-col bg-slate-950 overflow-hidden select-none',
         className
       )}
     >
       {/* Contenedor del lienzo WebGL */}
-      <div ref={containerRef} className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing" />
+      <div
+        ref={containerRef}
+        data-scene3d-canvas="true"
+        className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"
+      />
 
       {/* Estado vacío si no hay diseño cargado */}
       {!hasData && (
@@ -120,12 +142,15 @@ export default function VoxelScene3D({ className }: Props) {
         </div>
       )}
 
-      {/* Controles flotantes de despiece e inspección por capa */}
+      {/* Controles de despiece e inspección por capa estrictamente en la esquina inferior derecha */}
       {hasData && (
-        <div className="absolute bottom-4 right-4 max-w-xs w-full z-10 pointer-events-auto">
-          <LayerStackControls model3D={model3D} />
-        </div>
+        <LayerStackControls
+          model3D={model3D}
+          className="absolute bottom-4 right-4 z-10 max-w-xs w-[calc(100%-2rem)] sm:w-80 pointer-events-auto shadow-2xl"
+        />
       )}
     </div>
   )
-}
+})
+
+export default VoxelScene3D

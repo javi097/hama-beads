@@ -58,10 +58,10 @@ describe('assembly-guide — deriveAssemblySteps', () => {
 
     // Verifica que cada paso desglosa el inventario por color
     expect(steps[0].beadCounts[0].color.id).toBe('05')
-    expect(steps[0].beadCounts[0].count).toBe(25)
+    expect(steps[0].beadCounts[0].count).toBe(layers[0].beadCount)
   })
 
-  it('descompone correctamente un modelo Interlocking de Caja 3D en 6 pasos (uno por placa)', () => {
+  it('descompone correctamente un modelo Interlocking de Caja 3D en 2 pasos (uno por placa cruzada)', () => {
     const grid = createSolidGrid(4, 4, redBead)
     const plates = generateInterlockingPlates(grid, 'box', 4, 5.0)
     const totalBeads = plates.reduce((sum, p) => {
@@ -83,10 +83,41 @@ describe('assembly-guide — deriveAssemblySteps', () => {
 
     const steps = deriveAssemblySteps(model)
 
-    expect(steps).toHaveLength(6)
+    expect(steps).toHaveLength(2)
     expect(steps[0].type).toBe('plate')
     expect(steps[0].title).toContain('Frontal')
-    expect(steps[5].title).toContain('Base')
+    expect(steps[1].title).toContain('Perfil')
+
+    const stepsTotalBeads = steps.reduce((sum, s) => sum + s.totalBeads, 0)
+    expect(stepsTotalBeads).toBe(totalBeads)
+  })
+
+  it('descompone correctamente un modelo Interlocking de Costillas (cross_ribs) en 3 pasos', () => {
+    const grid = createSolidGrid(6, 6, redBead)
+    const plates = generateInterlockingPlates(grid, 'cross_ribs', 4, 5.0)
+    const totalBeads = plates.reduce((sum, p) => {
+      let count = 0
+      for (const row of p.cells) {
+        for (const cell of row) {
+          if (cell !== null) count++
+        }
+      }
+      return sum + count
+    }, 0)
+
+    const model: Model3DResult = {
+      mode: 'interlocking',
+      plates,
+      totalBeads,
+      dimensionsMm: { x: 30, y: 30, z: 20 },
+    }
+
+    const steps = deriveAssemblySteps(model)
+
+    expect(steps).toHaveLength(3)
+    expect(steps[0].title).toContain('Figura Central')
+    expect(steps[1].title).toContain('Costilla Transversal 1')
+    expect(steps[2].title).toContain('Costilla Transversal 2')
 
     const stepsTotalBeads = steps.reduce((sum, s) => sum + s.totalBeads, 0)
     expect(stepsTotalBeads).toBe(totalBeads)

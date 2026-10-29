@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useHamaStore } from '@/hama/store/hama.store'
 import { BEAD_TYPES, HAMA_PALETTE } from '@/hama/core/palette.const'
 import { calcBeadCount } from '@/hama/core/grid-calculator'
@@ -17,13 +17,14 @@ import Grid2DCanvas from '@/hama/components/Canvas2D/Grid2DCanvas'
 import ColorInventoryTable from '@/hama/components/Guide/ColorInventoryTable'
 import BoardsSummary from '@/hama/components/Guide/BoardsSummary'
 import PaletteModal from '@/hama/components/Guide/PaletteModal'
-import VoxelScene3D from '@/hama/components/Scene3D/VoxelScene3D'
+import VoxelScene3D, { type VoxelScene3DHandle } from '@/hama/components/Scene3D/VoxelScene3D'
 import Mode3DSelector from '@/hama/components/Controls/Mode3DSelector'
 import ExportPdfButton from '@/hama/components/Guide/ExportPdfButton'
 
 export default function StudioPage() {
   const [darkMode, setDarkMode] = useState(true)
   const [isPaletteOpen, setIsPaletteOpen] = useState(false)
+  const voxelSceneRef = useRef<VoxelScene3DHandle | null>(null)
 
   const activeView = useHamaStore((state) => state.activeView)
   const setActiveView = useHamaStore((state) => state.setActiveView)
@@ -133,6 +134,26 @@ export default function StudioPage() {
     exportPatternPng(gridData, beadSpec, widthCm, heightCm)
   }
 
+  // Captura reactiva de la escena 3D activa para la portada del manual PDF
+  const handleCaptureScreenshot = useCallback((): string => {
+    if (voxelSceneRef.current) {
+      return voxelSceneRef.current.captureScreenshot()
+    }
+    if (typeof document !== 'undefined') {
+      const canvas = (document.querySelector('div[data-scene3d-canvas] canvas') ||
+        document.querySelector('.cursor-grab canvas') ||
+        document.querySelector('canvas[data-engine^="three.js"]')) as HTMLCanvasElement | null
+      if (canvas && typeof canvas.toDataURL === 'function') {
+        try {
+          return canvas.toDataURL('image/png')
+        } catch {
+          return ''
+        }
+      }
+    }
+    return ''
+  }, [])
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
       {/* 1. Barra superior de navegación y acciones globales */}
@@ -207,7 +228,7 @@ export default function StudioPage() {
               <span>⬇ Descargar Patrón (PNG)</span>
             </button>
           ) : (
-            <ExportPdfButton />
+            <ExportPdfButton captureScreenshot={handleCaptureScreenshot} />
           )}
 
           {/* Toggle de tema claro / oscuro */}
@@ -251,8 +272,8 @@ export default function StudioPage() {
               </div>
             </div>
           ) : (
-            <div className="bg-slate-950 rounded-2xl border border-slate-800 shadow-sm overflow-hidden flex flex-col h-full min-h-[580px]">
-              <VoxelScene3D />
+            <div className="bg-slate-950 rounded-2xl border border-slate-800 shadow-sm overflow-hidden flex flex-col flex-1 h-full min-h-[580px]">
+              <VoxelScene3D ref={voxelSceneRef} className="flex-1" />
             </div>
           )
         }
@@ -272,7 +293,7 @@ export default function StudioPage() {
                     Descarga en PDF la guía paso a paso con cuadrículas vectoriales
                   </p>
                 </div>
-                <ExportPdfButton />
+                <ExportPdfButton captureScreenshot={handleCaptureScreenshot} />
               </div>
 
               {/* Inventario 3D sincronizado con el modelo activo */}

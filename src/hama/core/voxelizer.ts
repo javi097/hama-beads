@@ -5,8 +5,19 @@ import type {
   InterlockingStructureType,
   Mode3DType,
   Model3DResult,
+  GenerateHollowLayersOptions,
+  VolumeProfile,
 } from '@/interfaces/hama-3d.interface'
 import { HAMA_PALETTE } from './palette.const'
+import {
+  extrudeFrom2D,
+  createCavityMaskByColor,
+  createCavityMaskBySeed,
+  applyCavity,
+  extractZSlice,
+  setVoxel,
+  ensureVerticalSupport,
+} from './voxel-grid'
 
 /**
  * Identifica las celdas interiores de una cuadrícula de perlas mediante erosión morfológica
@@ -120,81 +131,410 @@ export function identifyInteriorCells(
 }
 
 /**
- * Genera el conjunto de capas apiladas para el modo de Apilado Multicapa Hueco (Slicing Inteligente).
- * - La primera capa (Base, índice 1) y la última capa (Tapa, índice N) son 100% sólidas.
- * - Las capas intermedias tienen sus celdas interiores vaciadas (convertidas a null).
- * - El número de capas se acota estrictamente entre 3 y 30.
+ * Genera un mapa de profundidad 2.5D/3D normalizado (valores entre 0.0 y 1.0) para cada celda
+ * de la cuadrícula, combinando la luminancia aparente, la distancia morfológica centrada
+ * (abombamiento / volumen natural de regiones continuas) y la saliencia o gradiente local.
+ *
+ * Celdas vacías (null) tienen profundidad exactamente 0.0.
+ * Celdas ocupadas tienen profundidad normalizada entre 0.10 y 1.00.
+ *
+ * @param baseGrid Cuadrícula 2D con celdas BeadCell[][]
+ * @returns Matriz numérica rows x cols con valores de profundidad normalizada [0.0, 1.0]
+ */
+export function computeDepthMap(baseGrid: BeadCell[][]): number[][] {
+  const rows = baseGrid.length
+  if (rows === 0) return []
+  const cols = baseGrid[0].length
+  if (cols === 0) return [[]]
+
+  // 1. Transformada de distancia euclidiana/4-conectada desde el contorno exterior
+  const dist: number[][] = Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => Infinity)
+  )
+  const queue: [number, number][] = []
+  const directions = [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+  ]
+
+  let occupiedCount = 0
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      if (baseGrid[y][x] === null) {
+        dist[y][x] = 0
+        continue
+      }
+      occupiedCount++
+
+      const isGridEdge = y === 0 || y === rows - 1 || x === 0 || x === cols - 1
+      let touchesNull = isGridEdge
+      if (!touchesNull) {
+        for (const [dy, dx] of directions) {
+          const ny = y + dy
+          const nx = x + dx
+          if (baseGrid[ny][nx] === null) {
+            touchesNull = true
+            break
+          }
+        }
+      }
+
+      if (touchesNull) {
+        dist[y][x] = 1
+        queue.push([y, x])
+      }
+    }
+  }
+
+  if (occupiedCount === 0) {
+    return Array.from({ length: rows }, () => Array.from({ length: cols }, () => 0))
+  }
+
+  let head = 0
+  let maxDist = 1
+  while (head < queue.length) {
+    const [cy, cx] = queue[head++]
+    const currentDist = dist[cy][cx]
+    if (currentDist > maxDist) {
+      maxDist = currentDist
+    }
+
+    for (const [dy, dx] of directions) {
+      const ny = cy + dy
+      const nx = cx + dx
+      if (ny >= 0 && ny < rows && nx >= 0 && nx < cols) {
+        if (baseGrid[ny][nx] !== null && dist[ny][nx] > currentDist + 1) {
+          dist[ny][nx] = currentDist + 1
+          queue.push([ny, nx])
+        }
+      }
+    }
+  }
+
+  // 2. Cálculo de saliencia / gradiente local
+  const saliency: number[][] = Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => 0)
+  )
+  let maxSaliency = 0.001
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const cell = baseGrid[y][x]
+      if (cell === null) continue
+
+      let diffSum = 0
+      let neighborCount = 0
+      for (const [dy, dx] of directions) {
+        const ny = y + dy
+        const nx = x + dx
+        if (ny >= 0 && ny < rows && nx >= 0 && nx < cols && baseGrid[ny][nx] !== null) {
+          diffSum += Math.abs(cell.luminance - baseGrid[ny][nx]!.luminance)
+          neighborCount++
+        }
+      }
+      const sal = neighborCount > 0 ? diffSum / neighborCount : 0
+      saliency[y][x] = sal
+      if (sal > maxSaliency) {
+        maxSaliency = sal
+      }
+    }
+  }
+
+  // 3. Ponderación volumétrica
+  let minRaw = Infinity
+  let maxRaw = -Infinity
+  const rawMap: number[][] = Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => 0)
+  )
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const cell = baseGrid[y][x]
+      if (cell === null) continue
+
+      const normDist = dist[y][x] / maxDist
+      const lum = cell.luminance
+      const normSal = saliency[y][x] / maxSaliency
+
+      const val = 0.50 * normDist + 0.35 * lum + 0.15 * normSal
+      rawMap[y][x] = val
+      if (val < minRaw) minRaw = val
+      if (val > maxRaw) maxRaw = val
+    }
+  }
+
+  // 4. Normalización a [0.10, 1.00] para celdas ocupadas
+  const depthRange = maxRaw - minRaw
+  const result: number[][] = Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => 0)
+  )
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      if (baseGrid[y][x] === null) {
+        result[y][x] = 0.0
+      } else if (depthRange > 0.0001) {
+        result[y][x] = 0.10 + 0.90 * ((rawMap[y][x] - minRaw) / depthRange)
+      } else {
+        result[y][x] = 0.50
+      }
+    }
+  }
+
+  return result
+}
+
+/**
+ * Calcula el radio morfológico (transformada de distancia al borde exterior)
+ * para cada celda no vacía de la cuadrícula.
+ * Celdas vacías o transparentes tienen radio 0.
+ */
+export function computeMorphologicalRadius(baseGrid: BeadCell[][]): {
+  radiusMap: number[][]
+  maxRadius: number
+} {
+  const rows = baseGrid.length
+  if (rows === 0) return { radiusMap: [], maxRadius: 0 }
+  const cols = baseGrid[0].length
+  if (cols === 0) return { radiusMap: [[]], maxRadius: 0 }
+
+  const dist: number[][] = Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => Infinity)
+  )
+  const queue: [number, number][] = []
+  const directions = [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+  ]
+
+  let occupiedCount = 0
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      if (baseGrid[y][x] === null) {
+        dist[y][x] = 0
+        continue
+      }
+      occupiedCount++
+
+      const isCanvasBorder = y === 0 || y === rows - 1 || x === 0 || x === cols - 1
+      let touchesNull = isCanvasBorder
+      if (!touchesNull) {
+        for (const [dy, dx] of directions) {
+          const ny = y + dy
+          const nx = x + dx
+          if (baseGrid[ny][nx] === null) {
+            touchesNull = true
+            break
+          }
+        }
+      }
+
+      if (touchesNull) {
+        dist[y][x] = 1.0
+        queue.push([y, x])
+      }
+    }
+  }
+
+  if (occupiedCount === 0) {
+    return {
+      radiusMap: Array.from({ length: rows }, () => Array.from({ length: cols }, () => 0)),
+      maxRadius: 0,
+    }
+  }
+
+  let head = 0
+  let maxRadius = 1.0
+  while (head < queue.length) {
+    const [cy, cx] = queue[head++]
+    const currentDist = dist[cy][cx]
+    if (currentDist > maxRadius) {
+      maxRadius = currentDist
+    }
+
+    for (const [dy, dx] of directions) {
+      const ny = cy + dy
+      const nx = cx + dx
+      if (ny >= 0 && ny < rows && nx >= 0 && nx < cols) {
+        if (baseGrid[ny][nx] !== null && dist[ny][nx] > currentDist + 1.0) {
+          dist[ny][nx] = currentDist + 1.0
+          queue.push([ny, nx])
+        }
+      }
+    }
+  }
+
+  return { radiusMap: dist, maxRadius }
+}
+
+/**
+ * Genera el conjunto de capas horizontales para el modo Apilado Hueco.
+ *
+ * Basado en la representación canónica VoxelGrid3D:
+ * - Capas base (Z=0, Capa 1) y superior (Z=N-1, Capa N) sólidas completas al 100% (RF-2.2).
+ * - Capas intermedias (1 < idx < N):
+ *   * Si se especifican cavidades selectivas (por color o semilla), vacía exclusivamente la cavidad indicada
+ *     (por ejemplo, el cuerpo de una cámara permanece sólido mientras el objetivo se vacía).
+ *   * Si no se especifican cavidades selectivas, vacía el núcleo interno morfológicamente mediante
+ *     `identifyInteriorCells(slice, wallThickness)` conservando un muro perimetral continuo de 1 o 2 perlas.
+ * - Validación de soporte vertical: garantiza que ninguna perla quede suspendida en el aire sobre un hueco
+ *   sin soporte directo inferior o unión lateral en su plano.
  *
  * @param baseGrid Cuadrícula 2D de diseño base
  * @param totalLayers Número de capas solicitadas (acotado a [3, 30])
  * @param wallThickness Grosor de pared perimetral en perlas (1 o 2)
- * @param diameterMm Diámetro de la perla en milímetros (ej. 5.0 para Midi, 2.5 para Mini)
+ * @param diameterMm Diámetro de la perla en milímetros
+ * @param options Opciones avanzadas de apilado (profile, cavityColorIds, cavitySeedCoords, etc.)
  */
 export function generateHollowLayers(
   baseGrid: BeadCell[][],
   totalLayers: number,
   wallThickness: 1 | 2,
-  diameterMm: number
+  diameterMm: number,
+  options?: GenerateHollowLayersOptions
 ): VoxelLayer[] {
   const rows = baseGrid.length
   if (rows === 0) return []
   const cols = baseGrid[0].length
+  if (cols === 0) return []
 
   const clampedLayers = Math.max(3, Math.min(30, Math.round(totalLayers)))
-  const interiorMask = identifyInteriorCells(baseGrid, wallThickness)
+  const profile = options?.profile ?? 'prismatic'
+  const preserveCapBottom = options?.preserveCapBottom ?? true
+  const preserveCapTop = options?.preserveCapTop ?? true
+  const enforceVerticalSupport = options?.enforceVerticalSupport ?? true
 
-  const layers: VoxelLayer[] = []
+  // 1. Extrusión inicial en VoxelGrid3D
+  let grid3D = extrudeFrom2D(baseGrid, {
+    depth: clampedLayers,
+    profile,
+    diameterMm,
+    minWallThickness: wallThickness,
+  })
 
-  for (let i = 0; i < clampedLayers; i++) {
-    const isBase = i === 0
-    const isTop = i === clampedLayers - 1
-    const layerIndex = i + 1
+  // 2. Vaciado selectivo o estructural
+  const hasSelectiveColorCavity =
+    options?.cavityColorIds && options.cavityColorIds.length > 0
+  const hasSelectiveSeedCavity =
+    options?.cavitySeedCoords && options.cavitySeedCoords.length > 0
 
-    let layerName: string
-    if (isBase) {
-      layerName = `Capa ${layerIndex} (Base)`
-    } else if (isTop) {
-      layerName = `Capa ${layerIndex} (Tapa)`
-    } else {
-      layerName = `Capa ${layerIndex} (Hueca)`
+  if (hasSelectiveColorCavity || hasSelectiveSeedCavity) {
+    // Modo Cavidad Selectiva (por IDs de color o coordenadas semilla)
+    const cavityMask: boolean[][][] = Array.from({ length: clampedLayers }, () =>
+      Array.from({ length: rows }, () =>
+        Array.from({ length: cols }, () => false)
+      )
+    )
+
+    const zMin = preserveCapBottom ? 1 : 0
+    const zMax = preserveCapTop ? clampedLayers - 2 : clampedLayers - 1
+
+    if (hasSelectiveColorCavity) {
+      const colorMask = createCavityMaskByColor(
+        baseGrid,
+        clampedLayers,
+        options!.cavityColorIds!,
+        [zMin, zMax]
+      )
+      for (let z = 0; z < clampedLayers; z++) {
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            if (colorMask[z]?.[y]?.[x]) cavityMask[z][y][x] = true
+          }
+        }
+      }
     }
 
-    let cells: BeadCell[][]
+    if (hasSelectiveSeedCavity) {
+      for (const [seedX, seedY] of options!.cavitySeedCoords!) {
+        const seedMask = createCavityMaskBySeed(
+          baseGrid,
+          clampedLayers,
+          seedX,
+          seedY,
+          [zMin, zMax]
+        )
+        for (let z = 0; z < clampedLayers; z++) {
+          for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+              if (seedMask[z]?.[y]?.[x]) cavityMask[z][y][x] = true
+            }
+          }
+        }
+      }
+    }
+
+    grid3D = applyCavity(grid3D, cavityMask, {
+      preserveCapBottom,
+      preserveCapTop,
+    })
+  } else {
+    // Modo Vaciado Inteligente Estándar (RF-2.3)
+    // Las capas intermedias se vacían morfológicamente preservando la pared de 1 o 2 perlas
+    const zStart = preserveCapBottom ? 1 : 0
+    const zEnd = preserveCapTop ? clampedLayers - 2 : clampedLayers - 1
+
+    for (let z = zStart; z <= zEnd; z++) {
+      const sliceCells = extractZSlice(grid3D, z)
+      const interiorMask = identifyInteriorCells(sliceCells, wallThickness)
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          if (interiorMask[y]?.[x]) {
+            setVoxel(grid3D, x, y, z, null)
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Garantía de soporte vertical (Anti-perlas flotantes)
+  if (enforceVerticalSupport) {
+    ensureVerticalSupport(grid3D, baseGrid)
+  }
+
+  // 4. Extracción de capas VoxelLayer[]
+  const layers: VoxelLayer[] = []
+  const kMid = (clampedLayers - 1) / 2
+
+  for (let z = 0; z < clampedLayers; z++) {
+    const layerIndex = z + 1
+    const cells = extractZSlice(grid3D, z)
     let beadCount = 0
 
-    if (isBase || isTop) {
-      // Capa sólida: clonar diseño base
-      cells = Array.from({ length: rows }, (_, y) =>
-        Array.from({ length: cols }, (_, x) => {
-          const bead = baseGrid[y][x]
-          if (bead !== null) {
-            beadCount++
-          }
-          return bead
-        })
-      )
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        if (cells[y][x] !== null) {
+          beadCount++
+        }
+      }
+    }
+
+    let name: string
+    if (layerIndex === 1) {
+      name = `Capa 1 (Base Sólida Posterior -Z)`
+    } else if (layerIndex === clampedLayers) {
+      name = `Capa ${layerIndex} (Tapa Superior Anterior +Z)`
+    } else if (Math.abs(z - kMid) < 0.5) {
+      name = `Capa ${layerIndex} (Central Z=0)`
+    } else if (z < kMid) {
+      name = `Capa ${layerIndex} (Posterior -Z)`
     } else {
-      // Capa intermedia: vaciar celdas interiores (convertidas en null)
-      cells = Array.from({ length: rows }, (_, y) =>
-        Array.from({ length: cols }, (_, x) => {
-          if (interiorMask[y]?.[x]) {
-            return null
-          }
-          const bead = baseGrid[y][x]
-          if (bead !== null) {
-            beadCount++
-          }
-          return bead
-        })
-      )
+      name = `Capa ${layerIndex} (Anterior +Z)`
     }
 
     layers.push({
       layerIndex,
-      name: layerName,
+      name,
       cells,
       beadCount,
-      zOffsetMm: i * diameterMm,
+      zOffsetMm: z * diameterMm,
     })
   }
 
@@ -216,6 +556,92 @@ export function generateHollowLayers(
  * @param depthBeads Profundidad en cuentas (acotada a [3, 30])
  * @param diameterMm Diámetro de la perla en milímetros
  */
+/**
+ * Determina el propietario único de un vóxel superficial en una caja 3D (cols x rows x depth).
+ * Garantiza que en cada unión machihembrada a 90° (aristas) las pestañas alternen con paso 1 perla,
+ * y en los vértices (esquinas) pertenezcan exclusivamente a Frontal o Trasera sin ninguna colisión.
+ */
+export function getBoxOwner(
+  x: number,
+  y: number,
+  z: number,
+  cols: number,
+  rows: number,
+  depth: number
+): 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom' {
+  const isFront = z === depth - 1
+  const isBack = z === 0
+  const isLeft = x === 0
+  const isRight = x === cols - 1
+  const isTop = y === 0
+  const isBottom = y === rows - 1
+
+  const touchCount =
+    (isFront ? 1 : 0) +
+    (isBack ? 1 : 0) +
+    (isLeft ? 1 : 0) +
+    (isRight ? 1 : 0) +
+    (isTop ? 1 : 0) +
+    (isBottom ? 1 : 0)
+
+  // 1. Caras interiores de la caja (tocan solo una cara superficial)
+  if (touchCount <= 1) {
+    if (isFront) return 'front'
+    if (isBack) return 'back'
+    if (isLeft) return 'left'
+    if (isRight) return 'right'
+    if (isTop) return 'top'
+    return 'bottom'
+  }
+
+  // 2. Vértices / Esquinas (tocan 3 caras simultáneamente)
+  if (touchCount >= 3) {
+    // Vértices frontales pertenecen a Front; traseros pertenecen a Back
+    return isFront ? 'front' : 'back'
+  }
+
+  // 3. Aristas compartidas a 90° (tocan exactamente 2 caras)
+  // Aristas verticales Y (Front/Back con Left/Right): alternan según Y
+  if ((isFront || isBack) && (isLeft || isRight)) {
+    return y % 2 === 0 ? (isFront ? 'front' : 'back') : (isLeft ? 'left' : 'right')
+  }
+
+  // Aristas horizontales X (Front/Back con Top/Bottom): alternan según X
+  if ((isFront || isBack) && (isTop || isBottom)) {
+    return x % 2 === 0 ? (isFront ? 'front' : 'back') : (isTop ? 'top' : 'bottom')
+  }
+
+  // Aristas de profundidad Z (Top/Bottom con Left/Right): alternan según Z
+  if ((isTop || isBottom) && (isLeft || isRight)) {
+    return z % 2 === 0 ? (isTop ? 'top' : 'bottom') : (isLeft ? 'left' : 'right')
+  }
+
+  return 'front'
+}
+
+/**
+ * Genera el conjunto de placas ortogonales independientes para el modo de Ensamblado Interlocking.
+ *
+ * En `box` (Caja 3D):
+ * - 6 placas delgadas de 1 perla de espesor: Frontal (XY), Trasera (XY), Lateral Izquierda (YZ),
+ *   Lateral Derecha (YZ), Tapa Superior (XZ) y Base Inferior (XZ).
+ * - Dimensiones exactas:
+ *   * Front / Back: width × height (cols × rows)
+ *   * Left / Right: depthBeads × height (depth × rows)
+ *   * Top / Bottom: width × depthBeads (cols × depth)
+ * - En aristas a 90°, pestañas y ranuras alternadas de paso 1 perla (1 diente / 1 hueco)
+ *   sin colisión de volumen.
+ *
+ * En `cross_ribs` (Figura con costillas ortogonales):
+ * - 3 placas delgadas: Placa central (XY) conservando el diseño 2D con ranuras ascendentes
+ *   hasta el 50% de la altura, y dos costillas transversales (YZ) de 1 perla de grosor
+ *   con ranuras descendentes al 50% para encajar a media madera sin pegamento.
+ *
+ * @param baseGrid Cuadrícula 2D de diseño base
+ * @param structureType 'box' | 'cross_ribs'
+ * @param depthBeads Profundidad en cuentas (acotada a [3, 30])
+ * @param diameterMm Diámetro de la perla en milímetros
+ */
 export function generateInterlockingPlates(
   baseGrid: BeadCell[][],
   structureType: InterlockingStructureType,
@@ -229,264 +655,219 @@ export function generateInterlockingPlates(
 
   const depth = Math.max(3, Math.min(30, Math.round(depthBeads)))
 
-  // Determinar color de relleno para placas estructurales (el más frecuente o #01 blanco)
-  let fallbackBead: BeadCell = null
-  const colorCounts = new Map<string, { bead: NonNullable<BeadCell>; count: number }>()
+  // Color estructural para placas del kit:
+  // Se utiliza Blanco Hama (#01) oficial por defecto para dar un acabado limpio de maqueta,
+  // o el primer color no negro de la paleta si blanco no estuviera disponible.
+  const structuralBead: BeadCell =
+    HAMA_PALETTE.find((c) => c.id === '01') ||
+    baseGrid.flat().find((c) => c !== null && c.id !== '18') ||
+    baseGrid.flat().find((c) => c !== null) ||
+    HAMA_PALETTE[0]
+
+  // Encontrar rango horizontal y vertical del diseño (bounding box del objeto)
+  let minCol = cols
+  let maxCol = -1
+  let minRow = rows
+  let maxRow = -1
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
-      const cell = baseGrid[y][x]
-      if (cell !== null) {
-        const entry = colorCounts.get(cell.id)
-        if (entry) {
-          entry.count++
-        } else {
-          colorCounts.set(cell.id, { bead: cell, count: 1 })
-        }
+      if (baseGrid[y][x] !== null) {
+        if (x < minCol) minCol = x
+        if (x > maxCol) maxCol = x
+        if (y < minRow) minRow = y
+        if (y > maxRow) maxRow = y
       }
     }
   }
 
-  let maxCount = -1
-  for (const { bead, count } of colorCounts.values()) {
-    if (count > maxCount) {
-      maxCount = count
-      fallbackBead = bead
-    }
+  // Si no hay perlas, usar toda la cuadrícula
+  if (maxCol === -1) {
+    minCol = 0
+    maxCol = cols - 1
+    minRow = 0
+    maxRow = rows - 1
   }
-  if (!fallbackBead) {
-    fallbackBead = HAMA_PALETTE.find((c) => c.id === '01') || null
-  }
+
+  const figWidth = maxCol - minCol + 1
+  const xCenter = Math.floor((minCol + maxCol) / 2)
+  const zSlot = Math.floor(depth / 2)
 
   if (structureType === 'box') {
-    // 1. Frontal (XY, Z = (depth - 1) * diameterMm)
+    // Buscar la columna central que contenga perlas para realizar el cruce a media madera
+    let xCross = xCenter
+    let topY = -1
+    let botY = -1
+
+    for (let offset = 0; offset <= Math.floor(figWidth / 2); offset++) {
+      for (const testCol of [xCenter + offset, xCenter - offset]) {
+        if (testCol >= minCol && testCol <= maxCol) {
+          let t = -1
+          let b = -1
+          for (let y = 0; y < rows; y++) {
+            if (baseGrid[y][testCol] !== null) {
+              if (t === -1) t = y
+              b = y
+            }
+          }
+          if (t !== -1) {
+            xCross = testCol
+            topY = t
+            botY = b
+            break
+          }
+        }
+      }
+      if (topY !== -1) break
+    }
+
+    if (topY === -1) {
+      topY = minRow
+      botY = maxRow
+    }
+
+    const crossHeight = botY - topY + 1
+    const halfH = Math.max(1, Math.floor(crossHeight / 2))
+
+    // 1. Placa Frontal (XY): conserva el diseño 2D completo del objeto
+    // con una ranura vertical ascendente de 1 perla de paso desde la base hasta el 50% de la altura
     const frontCells: BeadCell[][] = Array.from({ length: rows }, (_, y) =>
       Array.from({ length: cols }, (_, x) => {
-        // En los bordes exteriores, alternar pestañas (y o x par) y ranuras (y o x impar)
-        const isLeft = x === 0
-        const isRight = x === cols - 1
-        const isTop = y === 0
-        const isBottom = y === rows - 1
-
-        if (isLeft || isRight) {
-          if (y % 2 !== 0) return null
+        if (baseGrid[y][x] === null) return null
+        if (x === xCross && y >= botY - halfH + 1 && y <= botY) {
+          return null // Ranura de encaje inferior
         }
-        if (isTop || isBottom) {
-          if (x % 2 !== 0) return null
-        }
-
-        return baseGrid[y][x] || fallbackBead
+        return baseGrid[y][x]
       })
     )
 
-    // 2. Trasera (XY, Z = 0)
-    const backCells: BeadCell[][] = Array.from({ length: rows }, (_, y) =>
-      Array.from({ length: cols }, (_, x) => {
-        const isLeft = x === 0
-        const isRight = x === cols - 1
-        const isTop = y === 0
-        const isBottom = y === rows - 1
-
-        if (isLeft || isRight) {
-          if (y % 2 !== 0) return null
-        }
-        if (isTop || isBottom) {
-          if (x % 2 !== 0) return null
-        }
-
-        return fallbackBead
-      })
-    )
-
-    // 3. Lateral Izquierda (YZ, X = 0)
-    // Dimensiones: rows x depth (y x z)
-    const leftCells: BeadCell[][] = Array.from({ length: rows }, (_, y) =>
+    // 2. Placa de Perfil (YZ): placa ortogonal continua con ranura descendente al 50%
+    // y peana física continua en la base para sostener la figura erguida en pie
+    const profileCells: BeadCell[][] = Array.from({ length: rows }, (_, y) =>
       Array.from({ length: depth }, (_, z) => {
-        const isFrontEdge = z === depth - 1
-        const isBackEdge = z === 0
-        const isTopEdge = y === 0
-        const isBottomEdge = y === rows - 1
-
-        // Aristas verticales de unión con Front y Back
-        if (isFrontEdge || isBackEdge) {
-          // Front/Back tienen perla en y % 2 === 0, por lo que Left debe tener hueco
-          if (y % 2 === 0) return null
-          return fallbackBead
+        if (y < topY || y > botY) {
+          return null
         }
 
-        // Aristas horizontales de unión con Top y Bottom (z interior [1, depth - 2])
-        if (isTopEdge || isBottomEdge) {
-          if (z % 2 === 0) return null
-          return fallbackBead
+        // Línea central de intersección con la placa frontal (zSlot):
+        if (z === zSlot) {
+          // Ranura descendente al 50% para encajar a media madera
+          if (y < topY + halfH) {
+            return null
+          }
+          return structuralBead
         }
 
-        return fallbackBead
-      })
-    )
-
-    // 4. Lateral Derecha (YZ, X = (cols - 1) * diameterMm)
-    const rightCells: BeadCell[][] = Array.from({ length: rows }, (_, y) =>
-      Array.from({ length: depth }, (_, z) => {
-        const isFrontEdge = z === depth - 1
-        const isBackEdge = z === 0
-        const isTopEdge = y === 0
-        const isBottomEdge = y === rows - 1
-
-        if (isFrontEdge || isBackEdge) {
-          if (y % 2 === 0) return null
-          return fallbackBead
-        }
-
-        if (isTopEdge || isBottomEdge) {
-          if (z % 2 === 0) return null
-          return fallbackBead
-        }
-
-        return fallbackBead
-      })
-    )
-
-    // 5. Tapa Superior (XZ, Y = 0)
-    // Dimensiones: depth x cols (z x x)
-    const topCells: BeadCell[][] = Array.from({ length: depth }, (_, z) =>
-      Array.from({ length: cols }, (_, x) => {
-        const isFrontEdge = z === depth - 1
-        const isBackEdge = z === 0
-        const isLeftEdge = x === 0
-        const isRightEdge = x === cols - 1
-
-        // Aristas que unen con Front y Back
-        if (isFrontEdge || isBackEdge) {
-          // Front/Back tienen perla en x % 2 === 0, por lo que Top debe tener hueco
-          if (x % 2 === 0) return null
-          return fallbackBead
-        }
-
-        // Aristas que unen con Left y Right (z interior [1, depth - 2])
-        if (isLeftEdge || isRightEdge) {
-          // Left/Right tienen perla en z % 2 !== 0, por lo que Top tiene perla en z % 2 === 0
-          if (z % 2 !== 0) return null
-          return fallbackBead
-        }
-
-        return fallbackBead
-      })
-    )
-
-    // 6. Base Inferior (XZ, Y = (rows - 1) * diameterMm)
-    // Dimensiones: depth x cols (z x x)
-    const bottomCells: BeadCell[][] = Array.from({ length: depth }, (_, z) =>
-      Array.from({ length: cols }, (_, x) => {
-        const isFrontEdge = z === depth - 1
-        const isBackEdge = z === 0
-        const isLeftEdge = x === 0
-        const isRightEdge = x === cols - 1
-
-        if (isFrontEdge || isBackEdge) {
-          if (x % 2 === 0) return null
-          return fallbackBead
-        }
-
-        if (isLeftEdge || isRightEdge) {
-          if (z % 2 !== 0) return null
-          return fallbackBead
-        }
-
-        return fallbackBead
+        // Alas continuas de la peana en toda la profundidad Z para estabilidad física
+        return structuralBead
       })
     )
 
     return [
       {
         id: 'front',
-        name: 'Frontal',
+        name: 'Placa Frontal',
         orientation: 'xy',
         cells: frontCells,
         widthBeads: cols,
         heightBeads: rows,
-        position3D: [0, 0, (depth - 1) * diameterMm],
+        position3D: [0, 0, zSlot * diameterMm],
       },
       {
-        id: 'back',
-        name: 'Trasera',
-        orientation: 'xy',
-        cells: backCells,
-        widthBeads: cols,
-        heightBeads: rows,
-        position3D: [0, 0, 0],
-      },
-      {
-        id: 'left',
-        name: 'Lateral Izquierda',
+        id: 'profile',
+        name: 'Placa de Perfil (Peana)',
         orientation: 'yz',
-        cells: leftCells,
+        cells: profileCells,
         widthBeads: depth,
         heightBeads: rows,
-        position3D: [0, 0, 0],
-      },
-      {
-        id: 'right',
-        name: 'Lateral Derecha',
-        orientation: 'yz',
-        cells: rightCells,
-        widthBeads: depth,
-        heightBeads: rows,
-        position3D: [(cols - 1) * diameterMm, 0, 0],
-      },
-      {
-        id: 'top',
-        name: 'Tapa Superior',
-        orientation: 'xz',
-        cells: topCells,
-        widthBeads: cols,
-        heightBeads: depth,
-        position3D: [0, 0, 0],
-      },
-      {
-        id: 'bottom',
-        name: 'Base Inferior',
-        orientation: 'xz',
-        cells: bottomCells,
-        widthBeads: cols,
-        heightBeads: depth,
-        position3D: [0, (rows - 1) * diameterMm, 0],
+        position3D: [xCross * diameterMm, 0, 0],
       },
     ]
   }
 
   // structureType === 'cross_ribs'
-  const zSlot = Math.floor(depth / 2)
-  const halfY = Math.floor(rows / 2)
+  const figureWidth = figWidth
+  const x1 =
+    figureWidth > 2
+      ? minCol + Math.max(1, Math.floor(figureWidth / 3))
+      : minCol
+  const x2 =
+    figureWidth > 3
+      ? minCol +
+        Math.min(
+          figureWidth - 2,
+          Math.max(Math.floor(figureWidth / 3) + 1, Math.floor((2 * figureWidth) / 3))
+        )
+      : maxCol
 
-  const x1 = cols > 2 ? Math.max(1, Math.floor(cols / 3)) : 0
-  const x2 = cols > 3 ? Math.min(cols - 2, Math.max(x1 + 1, Math.floor((2 * cols) / 3))) : (cols > 1 ? cols - 1 : 0)
+  // Calcular rango vertical de la figura en cada columna de costilla
+  const getColBounds = (col: number) => {
+    let topY = -1
+    let botY = -1
+    for (let y = 0; y < rows; y++) {
+      if (baseGrid[y][col] !== null) {
+        if (topY === -1) topY = y
+        botY = y
+      }
+    }
+    if (topY === -1) {
+      topY = minRow
+      botY = maxRow
+    }
+    return { topY, botY, height: botY - topY + 1 }
+  }
 
-  // 1. Placa principal central (XY)
-  // Las columnas x1 y x2 se vacían en la mitad inferior (y >= halfY) para recibir las costillas
+  const bounds1 = getColBounds(x1)
+  const bounds2 = getColBounds(x2)
+
+  const halfH1 = Math.max(1, Math.floor(bounds1.height / 2))
+  const halfH2 = Math.max(1, Math.floor(bounds2.height / 2))
+
+  // 1. Placa central (XY): mantiene el diseño 2D, con ranuras verticales de 1 perla de paso
+  // que suben desde la base de la intersección hasta el 50% de la altura
   const mainCells: BeadCell[][] = Array.from({ length: rows }, (_, y) =>
     Array.from({ length: cols }, (_, x) => {
-      if ((x === x1 || x === x2) && y >= halfY) {
+      if (baseGrid[y][x] === null) return null
+      if (x === x1 && y >= bounds1.botY - halfH1 + 1 && y <= bounds1.botY) {
+        return null
+      }
+      if (x === x2 && y >= bounds2.botY - halfH2 + 1 && y <= bounds2.botY) {
         return null
       }
       return baseGrid[y][x]
     })
   )
 
-  // Función para construir una costilla transversal (YZ)
-  // En zSlot, la mitad superior (y < halfY) está vaciada; la mitad inferior es sólida
-  const createRibCells = (columnX: number): BeadCell[][] => {
+  // 2. Peanas / Costillas transversales (YZ):
+  // Placas de base perpendiculares CONTINUAS (no fragmentos sueltos) de ancho depthBeads
+  // con ranuras descendentes al 50% que encajan firmemente a presión a media madera
+  const createRibCells = (
+    bounds: { topY: number; botY: number; height: number },
+    halfH: number
+  ): BeadCell[][] => {
     return Array.from({ length: rows }, (_, y) =>
       Array.from({ length: depth }, (_, z) => {
-        if (z === zSlot) {
-          if (y < halfY) return null
-          return baseGrid[y]?.[columnX] || fallbackBead
+        // Fuera del rango vertical del objeto no añadir material
+        if (y < bounds.topY || y > bounds.botY) {
+          return null
         }
-        return baseGrid[y]?.[columnX] || fallbackBead
+
+        // En la línea de intersección central con la placa principal (zSlot):
+        if (z === zSlot) {
+          // Ranura descendente: mitad superior es hueco (null) para encajar a media madera
+          if (y < bounds.topY + halfH) {
+            return null
+          }
+          return structuralBead
+        }
+
+        // Toda la extensión de la peana en Z es continua y sólida para máxima estabilidad física
+        return structuralBead
       })
     )
   }
 
-  const rib1Cells = createRibCells(x1)
-  const rib2Cells = createRibCells(x2)
+  const rib1Cells = createRibCells(bounds1, halfH1)
+  const rib2Cells = createRibCells(bounds2, halfH2)
 
   return [
     {
@@ -598,6 +979,12 @@ export interface ComputeModel3DOptions {
   interlockingDepthBeads: number
   reliefLevels: number
   diameterMm: number
+  hollowProfile?: VolumeProfile
+  cavityColorIds?: string[]
+  cavitySeedCoords?: [number, number][]
+  preserveCapBottom?: boolean
+  preserveCapTop?: boolean
+  enforceVerticalSupport?: boolean
 }
 
 /**
@@ -626,6 +1013,12 @@ export function computeModel3D(
     interlockingDepthBeads,
     reliefLevels,
     diameterMm,
+    hollowProfile,
+    cavityColorIds,
+    cavitySeedCoords,
+    preserveCapBottom,
+    preserveCapTop,
+    enforceVerticalSupport,
   } = options
 
   if (mode3d === 'hollow') {
@@ -633,7 +1026,15 @@ export function computeModel3D(
       cells,
       hollowLayersCount,
       hollowWallThickness,
-      diameterMm
+      diameterMm,
+      {
+        profile: hollowProfile,
+        cavityColorIds,
+        cavitySeedCoords,
+        preserveCapBottom,
+        preserveCapTop,
+        enforceVerticalSupport,
+      }
     )
     const totalBeads = layers.reduce((sum, l) => sum + l.beadCount, 0)
     return {

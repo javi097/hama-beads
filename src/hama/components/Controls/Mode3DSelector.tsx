@@ -182,7 +182,7 @@ export default function Mode3DSelector({ className }: Props) {
                     : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                 )}
               >
-                Caja 3D (6 placas)
+                Estructura Cruzada (2 placas)
               </button>
               <button
                 type="button"

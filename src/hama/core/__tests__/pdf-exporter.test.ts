@@ -47,7 +47,38 @@ describe('pdf-exporter — buildAssemblyManualPdf', () => {
     expect(doc.getNumberOfPages()).toBe(4)
   })
 
-  it('compone correctamente un manual para Ensamblado Interlocking (6 placas)', () => {
+  it('incrusta la captura real del modelo 3D en la portada si coverPreviewDataUrl está presente', () => {
+    const grid = createSolidGrid(3, 3, redBead)
+    const gridData: GridData = { cols: 3, rows: 3, cells: grid }
+
+    const model3D = computeModel3D(gridData, {
+      mode3d: 'hollow',
+      hollowLayersCount: 3,
+      hollowWallThickness: 1,
+      interlockingType: 'box',
+      interlockingDepthBeads: 3,
+      reliefLevels: 3,
+      diameterMm: 5.0,
+    })!
+
+    const steps = deriveAssemblySteps(model3D)
+    const samplePngDataUrl =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+
+    const options: PdfExportOptions = {
+      projectName: 'Proyecto con Captura 3D Real',
+      beadTypeName: 'Hama Beads Midi (5.0 mm)',
+      dimensionsCm: '1.5 × 1.5 × 1.5 cm',
+      model3D,
+      steps,
+      coverPreviewDataUrl: samplePngDataUrl,
+    }
+
+    const doc = buildAssemblyManualPdf(options)
+    expect(doc.getNumberOfPages()).toBe(4)
+  })
+
+  it('compone correctamente un manual para Ensamblado Interlocking (2 placas)', () => {
     const grid = createSolidGrid(4, 4, blackBead)
     const gridData: GridData = { cols: 4, rows: 4, cells: grid }
 
@@ -62,7 +93,7 @@ describe('pdf-exporter — buildAssemblyManualPdf', () => {
     })!
 
     const steps = deriveAssemblySteps(model3D)
-    expect(steps).toHaveLength(6)
+    expect(steps).toHaveLength(2)
 
     const options: PdfExportOptions = {
       projectName: 'Caja Interlocking',
@@ -75,8 +106,8 @@ describe('pdf-exporter — buildAssemblyManualPdf', () => {
 
     const doc = buildAssemblyManualPdf(options)
 
-    // Portada (1) + 6 placas = 7 páginas en total
-    expect(doc.getNumberOfPages()).toBe(7)
+    // Portada (1) + 2 placas = 3 páginas en total
+    expect(doc.getNumberOfPages()).toBe(3)
   })
 
   it('maneja pasos vacíos o modelos sin perlas generando al menos la portada sin fallos', () => {
