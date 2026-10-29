@@ -13,6 +13,8 @@ import {
   extrudeFrom2D,
   synthesizeRoundedVolume,
   resolveVoxelColor,
+  extractStructuralGrid,
+  identifyInteriorVoxels3D,
   createCavityMaskByColor,
   createCavityMaskBySeed,
   applyCavity,
@@ -21,7 +23,7 @@ import {
   ensureVerticalSupport,
 } from './voxel-grid'
 
-export { resolveVoxelColor }
+export { resolveVoxelColor, extractStructuralGrid }
 
 /**
  * Identifica las celdas interiores de una cuadrícula de perlas mediante erosión morfológica
@@ -1090,7 +1092,11 @@ export function generateInterlockingPlates(
 
   const xSpine = Math.round((minCol + maxCol) / 2)
 
-  // 1. Generar las capas del cuerpo (orientation 'xy')
+  // 1. Identificar el núcleo interior 3D para vaciado seguro
+  // NUNCA eliminar vóxeles que formen parte de la superficie exterior de la figura (espesor de pared 1 perla)
+  const interior3D = identifyInteriorVoxels3D(grid3D, 1)
+
+  // 2. Generar las capas del cuerpo (orientation 'xy')
   const bodyPlates: InterlockingPlate[] = []
   const spineCells: (BeadCell | null)[][] = Array.from({ length: rows }, () =>
     Array(depth).fill(null)
@@ -1098,14 +1104,13 @@ export function generateInterlockingPlates(
 
   for (let z = 0; z < depth; z++) {
     const slice = extractZSlice(grid3D, z)
-    // Identificar núcleo interior para vaciado (espesor de pared 1 perla)
-    const interiorMask = identifyInteriorCells(slice, 1)
 
-    // Cuadrícula de la capa
+    // Cuadrícula de la capa: se vacía ÚNICAMENTE donde interior3D es true
+    // Las superficies exteriores frontal (+Z), trasera (-Z) y perimetrales permanecen sólidas
     const layerCells: (BeadCell | null)[][] = Array.from({ length: rows }, (_, y) =>
       Array.from({ length: cols }, (_, x) => {
         if (slice[y][x] === null) return null
-        if (interiorMask[y]?.[x]) return null // Núcleo hueco para ahorro de material
+        if (interior3D[z]?.[y]?.[x]) return null // Núcleo interior hueco para ahorro de perlas
         return slice[y][x]
       })
     )
@@ -1113,7 +1118,7 @@ export function generateInterlockingPlates(
     // Buscar filas de cavidad interna en la columna del eje xSpine
     const cavityRows: number[] = []
     for (let y = 0; y < rows; y++) {
-      if (interiorMask[y]?.[xSpine]) {
+      if (interior3D[z]?.[y]?.[xSpine]) {
         cavityRows.push(y)
       }
     }
@@ -1137,10 +1142,10 @@ export function generateInterlockingPlates(
       layerCells[ySlot][xSpine] = null
 
       // Refuerzo lateral del orificio (flancos del socket)
-      if (xSpine - 1 >= 0 && baseGrid[ySlot][xSpine - 1] !== null) {
+      if (xSpine - 1 >= 0 && baseGrid[ySlot][xSpine - 1] !== null && layerCells[ySlot][xSpine - 1] === null && !interior3D[z]?.[ySlot]?.[xSpine - 1]) {
         layerCells[ySlot][xSpine - 1] = baseGrid[ySlot][xSpine - 1]
       }
-      if (xSpine + 1 < cols && baseGrid[ySlot][xSpine + 1] !== null) {
+      if (xSpine + 1 < cols && baseGrid[ySlot][xSpine + 1] !== null && layerCells[ySlot][xSpine + 1] === null && !interior3D[z]?.[ySlot]?.[xSpine + 1]) {
         layerCells[ySlot][xSpine + 1] = baseGrid[ySlot][xSpine + 1]
       }
 

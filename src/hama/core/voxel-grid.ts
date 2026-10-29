@@ -231,28 +231,239 @@ export function computeDistanceTransform2D(baseGrid: BeadCell[][]): {
 }
 
 /**
- * Determina el color del vóxel aplicando la regla de asimetría cromática Frontal vs. Dorsal:
+ * Extrae la cuadrícula estructural (structuralGrid) a partir de la cuadrícula frontal (frontGrid).
  *
- * 1. Cara Frontal (z >= zCenter):
- *    - Conserva exactamente el color baseGrid[y][x] para que los ojos, boca y detalles
- *      faciales frontales se vean perfectamente nítidos y reconocibles de frente.
+ * Separa conceptualmente:
+ * - frontGrid: patrón 2D original exacto (conserva ojos, boca, nariz y pequeños detalles).
+ * - structuralGrid: mapa de color para construir la masa volumétrica tridimensional (paredes laterales,
+ *   interior y dorso).
  *
- * 2. Lados y Espalda (z < zCenter, mitad trasera de la figura):
- *    - Detecta el "Color Base de Relleno" (el color predominante no-borde del segmento,
- *      ej. el melocotón/piel en el tallo de la seta o el blanco en la cabeza de un personaje).
- *    - Si baseGrid[y][x] es un rasgo facial interno pequeño (ej. un ojo negro de 1-2 perlas
- *      en medio de la cara o tallo), en la mitad trasera se sustituye por el Color Base de Relleno.
- *    - Los bordes exteriores (x === xStart || x === xEnd) conservan su color (ej. borde negro)
- *      en 360° para mantener la silueta exterior nítida.
- *    - Los rasgos grandes y claros (como las manchas blancas del sombrero) se mantienen.
+ * Clasifica componentes conexos (4-conectividad) analizando su contexto espacial:
+ * - Tamaño / área del componente
+ * - Si está rodeado o contenido dentro de una región mayor (isla interior)
+ * - Relación de perímetro de contacto con colores vecinos
+ * - Si el componente toca el exterior / transparencia (silueta)
+ *
+ * Un componente pequeño interior rodeado predominantemente por una región estructural se absorbe
+ * en el color de dicha región. Las regiones estructurales grandes o contiguas a la silueta
+ * conservan su identidad cromática original.
+ *
+ * @param frontGrid Cuadrícula bidimensional 2D original
+ */
+export function extractStructuralGrid(frontGrid: BeadCell[][]): BeadCell[][] {
+  const rows = frontGrid.length
+  if (rows === 0) return []
+  const cols = frontGrid[0].length
+  if (cols === 0) return [[]]
+
+  // Clonar matriz base
+  const result: (BeadCell | null)[][] = Array.from({ length: rows }, (_, y) =>
+    Array.from({ length: cols }, (_, x) => frontGrid[y][x])
+  )
+
+  const visited: boolean[][] = Array.from({ length: rows }, () => Array(cols).fill(false))
+  const compIdGrid: number[][] = Array.from({ length: rows }, () => Array(cols).fill(-1))
+
+  interface Component {
+    id: number
+    color: BeadCell
+    cells: [number, number][]
+    area: number
+  }
+
+  const components: Component[] = []
+
+  // 1. Detección de componentes 4-conexos de mismo color
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const bead = frontGrid[y][x]
+      if (bead === null || visited[y][x]) continue
+
+      const compId = components.length
+      const compCells: [number, number][] = []
+      const queue: [number, number][] = [[x, y]]
+      visited[y][x] = true
+      compIdGrid[y][x] = compId
+
+      let head = 0
+      while (head < queue.length) {
+        const [cx, cy] = queue[head++]
+        compCells.push([cy, cx])
+
+        for (const [dx, dy] of NEIGHBORS_4_2D) {
+          const nx = cx + dx
+          const ny = cy + dy
+          if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+            if (!visited[ny][nx] && frontGrid[ny][nx]?.id === bead.id) {
+              visited[ny][nx] = true
+              compIdGrid[ny][nx] = compId
+              queue.push([nx, ny])
+            }
+          }
+        }
+      }
+
+      components.push({
+        id: compId,
+        color: bead,
+        cells: compCells,
+        area: compCells.length,
+      })
+    }
+  }
+
+  if (components.length <= 1) {
+    return result as BeadCell[][]
+  }
+
+  // 2. Análisis de vecindad y contexto espacial para cada componente
+  interface ComponentAnalysis {
+    comp: Component
+    contactWithNull: number
+    totalEdges: number
+    dominantNeighborBead: BeadCell | null
+    dominantNeighborArea: number
+    dominantEdgeCount: number
+    colorEdges: number
+  }
+
+  const analysisList: ComponentAnalysis[] = []
+
+  for (const comp of components) {
+    let contactWithNull = 0
+    const neighborCompEdges = new Map<number, number>()
+    const neighborColorEdges = new Map<string, { count: number; bead: BeadCell }>()
+
+    for (const [cy, cx] of comp.cells) {
+      for (const [dx, dy] of NEIGHBORS_4_2D) {
+        const nx = cx + dx
+        const ny = cy + dy
+        if (nx < 0 || nx >= cols || ny < 0 || ny >= rows || frontGrid[ny][nx] === null) {
+          contactWithNull++
+        } else {
+          const nCompId = compIdGrid[ny][nx]
+          if (nCompId !== comp.id) {
+            neighborCompEdges.set(nCompId, (neighborCompEdges.get(nCompId) ?? 0) + 1)
+            const nBead = frontGrid[ny][nx]!
+            const entry = neighborColorEdges.get(nBead.id)
+            if (entry) {
+              entry.count++
+            } else {
+              neighborColorEdges.set(nBead.id, { count: 1, bead: nBead })
+            }
+          }
+        }
+      }
+    }
+
+    let dominantNeighborBead: BeadCell | null = null
+    let dominantEdgeCount = 0
+    let colorEdges = 0
+
+    for (const entry of neighborColorEdges.values()) {
+      colorEdges += entry.count
+      if (entry.count > dominantEdgeCount) {
+        dominantEdgeCount = entry.count
+        dominantNeighborBead = entry.bead
+      }
+    }
+
+    // Calcular área total de los componentes vecinos que comparten el color dominante
+    let dominantNeighborArea = 0
+    if (dominantNeighborBead) {
+      for (const [nCompId] of neighborCompEdges) {
+        if (components[nCompId].color.id === dominantNeighborBead.id) {
+          dominantNeighborArea += components[nCompId].area
+        }
+      }
+    }
+
+    const totalEdges = contactWithNull + colorEdges
+
+    analysisList.push({
+      comp,
+      contactWithNull,
+      totalEdges,
+      dominantNeighborBead,
+      dominantNeighborArea,
+      dominantEdgeCount,
+      colorEdges,
+    })
+  }
+
+  // 3. Ordenar componentes por área ascendente para resolver anidamientos
+  analysisList.sort((a, b) => a.comp.area - b.comp.area)
+
+  // 4. Clasificación y absorción de detalles interiores
+  for (const analysis of analysisList) {
+    const {
+      comp,
+      contactWithNull,
+      totalEdges,
+      dominantNeighborBead,
+      dominantNeighborArea,
+      dominantEdgeCount,
+      colorEdges,
+    } = analysis
+
+    if (!dominantNeighborBead || totalEdges === 0) continue
+
+    const A = comp.area
+    const A_dom = dominantNeighborArea
+    const P_dom = dominantEdgeCount
+    const P_null = contactWithNull
+    const P_colors = colorEdges
+
+    // Criterio 1: Isla interior completamente encerrada (cero contacto con null/exterior)
+    // Ej: ojo, boca, pupila o peca rodeada por piel o cuerpo
+    const isEnclosedIsland =
+      P_null === 0 &&
+      P_colors > 0 &&
+      P_dom / P_colors >= 0.55 &&
+      A <= 16 &&
+      A_dom >= 2.0 * A
+
+    // Criterio 2: Detalle muy pequeño con contacto mínimo exterior
+    // Ej: ojo o nariz cerca del contorno de la cara (1 a 4 perlas)
+    const isSmallEmbeddedFeature =
+      A <= 4 &&
+      P_dom >= 2 * P_null &&
+      A_dom >= 2.5 * A
+
+    // Criterio 3: Mota o rasgo muy reducido de 1-2 perlas
+    const isTinySpeckle =
+      A <= 2 &&
+      P_dom >= P_null &&
+      A_dom >= 2.0 * A
+
+    const isDetail = isEnclosedIsland || isSmallEmbeddedFeature || isTinySpeckle
+
+    if (isDetail) {
+      // Absorber el detalle en el color estructural circundante
+      for (const [cy, cx] of comp.cells) {
+        result[cy][cx] = dominantNeighborBead
+      }
+      comp.color = dominantNeighborBead
+    }
+  }
+
+  return result as BeadCell[][]
+}
+
+/**
+ * Determina el color del vóxel aplicando la regla de separación Frontal vs. Estructural:
+ * - Superficie frontal (z === zMax o z >= zCenter si zMax no está definido): conserva exactamente baseGrid[y][x].
+ * - Profundidad, lados y espalda (z < zMax): utiliza structuralGrid[y][x].
  *
  * @param baseGrid Cuadrícula 2D
  * @param y Fila
  * @param x Columna
  * @param z Capa Z actual
  * @param zCenter Centro geométrico en Z ((depth - 1) / 2)
- * @param xStart Columna de inicio del segmento horizontal
- * @param xEnd Columna de fin del segmento horizontal
+ * @param xStart Columna de inicio del segmento horizontal opcional
+ * @param xEnd Columna de fin del segmento horizontal opcional
+ * @param zMax Cota máxima frontal de la columna (x, y) opcional
+ * @param structuralGrid Cuadrícula estructural precalculada opcional
  */
 export function resolveVoxelColor(
   baseGrid: BeadCell[][],
@@ -260,99 +471,34 @@ export function resolveVoxelColor(
   x: number,
   z: number,
   zCenter: number,
-  xStart: number,
-  xEnd: number
+  _xStart?: number,
+  _xEnd?: number,
+  zMax?: number,
+  structuralGrid?: BeadCell[][]
 ): BeadCell | null {
   const currentBead = baseGrid[y]?.[x] ?? null
   if (!currentBead) return null
 
-  // 1. Cara Frontal (z >= zCenter): conserva fielmente el color del diseño 2D
-  if (z >= zCenter) {
+  // Si se especifica zMax, la superficie frontal exterior es exactamente z === zMax.
+  // Si no se especifica zMax, se usa z >= zCenter para compatibilidad.
+  const isFront = zMax !== undefined ? z === zMax : z >= zCenter
+  if (isFront) {
     return currentBead
   }
 
-  // 2. Bordes exteriores de la silueta en X (x === xStart || x === xEnd):
-  // Conservan el contorno exterior en 360° para definir la silueta
-  if (x === xStart || x === xEnd) {
-    return currentBead
-  }
-
-  // 3. Cara Posterior (z < zCenter): detectar Color Base de Relleno del segmento
-  const colorCounts = new Map<string, { count: number; bead: BeadCell }>()
-  for (let c = xStart + 1; c < xEnd; c++) {
-    const b = baseGrid[y][c]
-    if (b !== null) {
-      const entry = colorCounts.get(b.id)
-      if (entry) {
-        entry.count++
-      } else {
-        colorCounts.set(b.id, { count: 1, bead: b })
-      }
-    }
-  }
-
-  if (colorCounts.size === 0) {
-    return currentBead
-  }
-
-  // Priorizar colores no negros (#18) como color base de relleno si existen
-  const nonBlackCandidates = Array.from(colorCounts.values()).filter(
-    (c) => c.bead.id !== '18'
-  )
-  const sortedCandidates = (
-    nonBlackCandidates.length > 0 ? nonBlackCandidates : Array.from(colorCounts.values())
-  ).sort((a, b) => b.count - a.count)
-
-  const fillColor = sortedCandidates[0].bead
-
-  // Si ya tiene el color de relleno, retornar
-  if (currentBead.id === fillColor.id) {
-    return currentBead
-  }
-
-  // 4. Comprobar si currentBead es un rasgo facial interno pequeño (ej. ojo negro)
-  let left = x
-  while (left >= xStart && baseGrid[y][left]?.id === currentBead.id) {
-    left--
-  }
-  let right = x
-  while (right <= xEnd && baseGrid[y][right]?.id === currentBead.id) {
-    right++
-  }
-  const runWidth = (right - 1) - (left + 1) + 1
-
-  // Criterio de rasgo facial / ojo:
-  // - Color negro (#18) o sustancialmente más oscuro que el color de relleno
-  // - Anchura reducida (<= 3 perlas de ancho)
-  const isDarkFeature =
-    currentBead.id === '18' ||
-    currentBead.id === '71' ||
-    currentBead.id === '12' ||
-    currentBead.luminance < fillColor.luminance - 0.2
-
-  const isSmallFeature = runWidth <= 3 && runWidth < (xEnd - xStart + 1) * 0.5
-
-  if (isDarkFeature && isSmallFeature) {
-    // Sustituir por el color base de relleno en la espalda/nuca
-    return fillColor
-  }
-
-  // De lo contrario (ej. manchas blancas en el sombrero de la seta), mantener el color original
-  return currentBead
+  const structural = structuralGrid ?? extractStructuralGrid(baseGrid)
+  return structural[y]?.[x] ?? currentBead
 }
 
 /**
  * Síntesis de Volumen 3D Redondeado (Revolución / Inflado Elipsoidal por Fila).
  *
  * A partir de una imagen/diseño 2D en baseGrid, reconstruye un volumen 3D completo en 360°:
- * - En cada fila y, identifica los segmentos horizontales continuos de perlas [xStart, xEnd].
- * - Para cada segmento de ancho W = xEnd - xStart + 1 y centro xCenter = (xStart + xEnd) / 2:
- *   * Rx = W / 2
- *   * Rz = (W / maxWidth) * (depth / 2)
- *   * Vóxel (x, y, z) pertenece al volumen si ((x - xCenter) / Rx)^2 + ((z - zCenter) / Rz)^2 <= 1.0
- *   * El color hereda baseGrid[y][x], proyectando los colores del arte alrededor de la figura.
- *
- * El resultado es una escultura 3D redondeada (por ejemplo, sombrero esférico y tallo cilíndrico en la seta).
+ * - frontGrid (baseGrid): frontal idéntico al original en z === zMax(x, y).
+ * - structuralGrid: la masa volumétrica, laterales y espalda continúan los colores estructurales.
+ * - Intervalo continuo de profundidad zMin(x, y) -> zMax(x, y) garantizado sin huecos en Z.
+ * - Continuidad de superficie en X/Y sin perforaciones accidentales.
+ * - Concavidades y transparencias originales 2D 100% conservadas.
  *
  * @param baseGrid Cuadrícula bidimensional 2D
  * @param depth Profundidad total en capas Z (acotada a [1, 30])
@@ -371,7 +517,10 @@ export function synthesizeRoundedVolume(
   const safeDepth = Math.max(1, Math.min(30, Math.round(depth)))
   const grid = createEmptyVoxelGrid(cols, rows, safeDepth, diameterMm)
 
-  // 1. Identificar segmentos horizontales continuos y calcular maxWidth global
+  // 1. Extraer la cuadrícula estructural desacoplada
+  const structuralGrid = extractStructuralGrid(baseGrid)
+
+  // 2. Identificar segmentos horizontales continuos y calcular maxWidth global
   interface Segment {
     xStart: number
     xEnd: number
@@ -427,41 +576,74 @@ export function synthesizeRoundedVolume(
   const zCenter = (safeDepth - 1) / 2
   const maxRz = safeDepth / 2
 
-  // 2. Evaluar para cada vóxel si cae dentro de la sección elipsoidal de su segmento
-  for (let z = 0; z < safeDepth; z++) {
-    const isCentralZ = Math.abs(z - zCenter) < 0.6 // Capa central coronal conserva 100% el diseño original 2D
+  // 3. Para cada celda (x, y) de la silueta válida, calcular [zMin, zMax] continuo
+  // y poblar los vóxeles sin huecos en Z
+  for (let y = 0; y < rows; y++) {
+    const segments = rowSegments[y]
+    if (segments.length === 0) continue
 
+    for (const seg of segments) {
+      const Rx = Math.max(0.5, seg.width / 2)
+      const Rz = Math.max(0.5, (seg.width / maxWidth) * maxRz)
+
+      for (let x = seg.xStart; x <= seg.xEnd; x++) {
+        const dx = (x - seg.xCenter) / Rx
+        const clampedDx = Math.max(-1.0, Math.min(1.0, dx))
+        const deltaZ = Rz * Math.sqrt(Math.max(0, 1.0 - clampedDx * clampedDx))
+
+        const zMin = Math.max(0, Math.min(safeDepth - 1, Math.round(zCenter - deltaZ)))
+        const zMax = Math.max(0, Math.min(safeDepth - 1, Math.round(zCenter + deltaZ)))
+
+        // Rellenar de forma estrictamente continua desde zMin hasta zMax
+        for (let z = zMin; z <= zMax; z++) {
+          // Frontal exacto en la superficie exterior frontal z === zMax;
+          // Fondo estructural en laterales, masa interior y dorso z < zMax
+          const bead =
+            z === zMax
+              ? baseGrid[y][x]!
+              : structuralGrid[y][x] ?? baseGrid[y][x]!
+
+          grid.voxels[z][y][x] = {
+            x,
+            y,
+            z,
+            color: bead,
+          }
+        }
+      }
+    }
+  }
+
+  // 4. Garantizar continuidad de superficie en X/Y (cierre morfológico de huecos accidentales)
+  // Si una celda (x, y) pertenece a la silueta 2D, pero en la capa z quedó vacía entre dos
+  // celdas ocupadas de su mismo segmento, se rellena para evitar perforaciones accidentales.
+  for (let z = 0; z < safeDepth; z++) {
     for (let y = 0; y < rows; y++) {
       const segments = rowSegments[y]
-      if (segments.length === 0) continue
-
       for (const seg of segments) {
-        const Rx = Math.max(0.5, seg.width / 2)
-        const Rz = Math.max(0.5, (seg.width / maxWidth) * maxRz)
-
         for (let x = seg.xStart; x <= seg.xEnd; x++) {
-          const dx = (x - seg.xCenter) / Rx
-          const dz = (z - zCenter) / Rz
-          const distSq = dx * dx + dz * dz
-
-          // En la capa central se incluye siempre todo el segmento;
-          // en las demás capas se comprueba la sección elipsoidal
-          if (isCentralZ || distSq <= 1.001) {
-            const bead = resolveVoxelColor(
-              baseGrid,
-              y,
-              x,
-              z,
-              zCenter,
-              seg.xStart,
-              seg.xEnd
-            )
-            if (bead !== null) {
+          if (grid.voxels[z][y][x] === null) {
+            // Comprobar si está encerrada en X dentro del segmento en la capa z
+            let hasLeft = false
+            for (let lx = x - 1; lx >= seg.xStart; lx--) {
+              if (grid.voxels[z][y][lx] !== null) {
+                hasLeft = true
+                break
+              }
+            }
+            let hasRight = false
+            for (let rx = x + 1; rx <= seg.xEnd; rx++) {
+              if (grid.voxels[z][y][rx] !== null) {
+                hasRight = true
+                break
+              }
+            }
+            if (hasLeft && hasRight) {
               grid.voxels[z][y][x] = {
                 x,
                 y,
                 z,
-                color: bead,
+                color: structuralGrid[y][x] ?? baseGrid[y][x]!,
               }
             }
           }

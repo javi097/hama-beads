@@ -21,14 +21,36 @@ import {
   extractSlicePlane,
   resolveVoxelColor,
   synthesizeRoundedVolume,
+  extractStructuralGrid,
 } from '../voxel-grid'
+import { generateInterlockingPlates, computeModel3D } from '../voxelizer'
 import { HAMA_PALETTE } from '../palette.const'
-import type { BeadCell } from '@/interfaces/hama.interface'
+import type { BeadCell, GridData } from '@/interfaces/hama.interface'
 import type { VoxelGrid3D } from '@/interfaces/hama-3d.interface'
 
 const redBead = HAMA_PALETTE.find((c) => c.id === '05')!
 const blueBead = HAMA_PALETTE.find((c) => c.id === '08')!
 const blackBead = HAMA_PALETTE.find((c) => c.id === '18')!
+const yellowBead = HAMA_PALETTE.find((c) => c.id === '03')!
+const greenBead = HAMA_PALETTE.find((c) => c.id === '10')!
+const peachBead = HAMA_PALETTE.find((c) => c.id === '78')! // Melocotón / Piel
+const whiteBead = HAMA_PALETTE.find((c) => c.id === '01')! // Blanco
+
+// Fila representativa de cara o tallo: Borde Negro - Piel - Ojo Negro - Piel - Borde Negro
+// Índices: 0=Null, 1=Negro (xStart), 2=Piel, 3=Negro (Ojo), 4=Piel, 5=Piel, 6=Negro (xEnd), 7=Null
+const createFaceRow = (): BeadCell[][] => {
+  const row: (BeadCell | null)[] = [
+    null,
+    blackBead, // 1 (xStart)
+    peachBead, // 2
+    blackBead, // 3 (Ojo)
+    peachBead, // 4
+    peachBead, // 5
+    blackBead, // 6 (xEnd)
+    null,
+  ]
+  return [row as BeadCell[]]
+}
 
 /** Helper para crear una cuadrícula bidimensional sólida */
 function createSolid2DGrid(cols: number, rows: number, bead = redBead): BeadCell[][] {
@@ -396,25 +418,6 @@ describe('VoxelGrid3D — Fase 1: Infraestructura Canónica', () => {
   })
 
   describe('Asimetría Cromática Frontal vs. Dorsal (Ojos y Rasgos Faciales)', () => {
-    const peachBead = HAMA_PALETTE.find((c) => c.id === '78')! // Melocotón / Piel
-    const whiteBead = HAMA_PALETTE.find((c) => c.id === '01')! // Blanco
-
-    // Fila representativa de cara o tallo: Borde Negro - Piel - Ojo Negro - Piel - Borde Negro
-    // Índices: 0=Null, 1=Negro (xStart), 2=Piel, 3=Negro (Ojo), 4=Piel, 5=Piel, 6=Negro (xEnd), 7=Null
-    const createFaceRow = (): BeadCell[][] => {
-      const row: (BeadCell | null)[] = [
-        null,
-        blackBead, // 1 (xStart)
-        peachBead, // 2
-        blackBead, // 3 (Ojo)
-        peachBead, // 4
-        peachBead, // 5
-        blackBead, // 6 (xEnd)
-        null,
-      ]
-      return [row as BeadCell[]]
-    }
-
     it('en la cara frontal (z >= zCenter), el ojo conserva exactamente el color negro original', () => {
       const grid = createFaceRow()
       const zCenter = 2.0 // depth = 5
@@ -462,9 +465,11 @@ describe('VoxelGrid3D — Fase 1: Infraestructura Canónica', () => {
       const depth = 5
       const volume = synthesizeRoundedVolume(grid, depth, 5.0)
 
-      const zCenter = 2
-      // En el plano frontal central Z=2, el vóxel en x=3 es negro (ojo visible)
-      expect(getVoxel(volume, 3, 0, zCenter)?.color.id).toBe('18')
+      // En la superficie frontal exterior Z=zMax (Z=4), el vóxel en x=3 es negro (ojo visible)
+      expect(getVoxel(volume, 3, 0, 4)?.color.id).toBe('18')
+
+      // En la profundidad y plano central Z=2, el vóxel en x=3 es melocotón (masa estructural)
+      expect(getVoxel(volume, 3, 0, 2)?.color.id).toBe('78')
 
       // En el plano dorsal Z=1, el vóxel en x=3 es melocotón (nuca limpia)
       expect(getVoxel(volume, 3, 0, 1)?.color.id).toBe('78')
@@ -474,6 +479,379 @@ describe('VoxelGrid3D — Fase 1: Infraestructura Canónica', () => {
       if (voxelZ0) {
         expect(voxelZ0.color.id).toBe('78')
       }
+    })
+  })
+
+  describe('Cromática y Geometría Continua — Interlocking cross_ribs (Validaciones Obligatorias)', () => {
+    describe('Validaciones Cromáticas (frontGrid vs. structuralGrid)', () => {
+      it('1. El frontal conserva exactamente el baseGrid original en toda la superficie', () => {
+        // Cuadrícula multicolor con detalles pequeños y regiones grandes
+        const grid: (BeadCell | null)[][] = [
+          [redBead, redBead, blueBead, blueBead],
+          [redBead, blackBead, blueBead, yellowBead],
+          [redBead, redBead, blueBead, blueBead],
+        ]
+        const volume = synthesizeRoundedVolume(grid as BeadCell[][], 5, 5.0)
+
+        for (let y = 0; y < 3; y++) {
+          for (let x = 0; x < 4; x++) {
+            const original = grid[y][x]
+            if (original !== null) {
+              // Encontrar la cota frontal zMax
+              let zMax = -1
+              for (let z = 0; z < volume.depth; z++) {
+                if (getVoxel(volume, x, y, z) !== null) {
+                  if (z > zMax) zMax = z
+                }
+              }
+              expect(zMax).toBeGreaterThanOrEqual(0)
+              expect(getVoxel(volume, x, y, zMax)?.color.id).toBe(original.id)
+            }
+          }
+        }
+      })
+
+      it('2. Un ojo pequeño negro no se propaga hacia la espalda', () => {
+        // Rojo 5x5 con un punto negro central (área 1, rodeado 100% por rojo)
+        const grid: (BeadCell | null)[][] = Array.from({ length: 5 }, () =>
+          Array.from({ length: 5 }, () => redBead)
+        )
+        grid[2][2] = blackBead
+
+        const volume = synthesizeRoundedVolume(grid as BeadCell[][], 5, 5.0)
+
+        // Encontrar zMax de la celda central (2, 2)
+        let zMax = -1
+        let zMin = Infinity
+        for (let z = 0; z < volume.depth; z++) {
+          if (getVoxel(volume, 2, 2, z) !== null) {
+            if (z > zMax) zMax = z
+            if (z < zMin) zMin = z
+          }
+        }
+
+        // Frontal: es negro
+        expect(getVoxel(volume, 2, 2, zMax)?.color.id).toBe(blackBead.id)
+
+        // Toda la profundidad y espalda por detrás de zMax: es rojo
+        for (let z = zMin; z < zMax; z++) {
+          expect(getVoxel(volume, 2, 2, z)?.color.id).toBe(redBead.id)
+        }
+      })
+
+      it('3. Un detalle pequeño de cualquier otro color tampoco se propaga a la espalda', () => {
+        // Verde 5x5 con un botón amarillo central
+        const grid: (BeadCell | null)[][] = Array.from({ length: 5 }, () =>
+          Array.from({ length: 5 }, () => greenBead)
+        )
+        grid[2][2] = yellowBead
+
+        const volume = synthesizeRoundedVolume(grid as BeadCell[][], 5, 5.0)
+
+        let zMax = -1
+        let zMin = Infinity
+        for (let z = 0; z < volume.depth; z++) {
+          if (getVoxel(volume, 2, 2, z) !== null) {
+            if (z > zMax) zMax = z
+            if (z < zMin) zMin = z
+          }
+        }
+
+        expect(getVoxel(volume, 2, 2, zMax)?.color.id).toBe(yellowBead.id)
+        for (let z = zMin; z < zMax; z++) {
+          expect(getVoxel(volume, 2, 2, z)?.color.id).toBe(greenBead.id)
+        }
+      })
+
+      it('4. Una región estructural grande mantiene su color en el volumen', () => {
+        const grid: (BeadCell | null)[][] = Array.from({ length: 4 }, () =>
+          Array.from({ length: 4 }, () => redBead)
+        )
+        const structural = extractStructuralGrid(grid as BeadCell[][])
+
+        for (let y = 0; y < 4; y++) {
+          for (let x = 0; x < 4; x++) {
+            expect(structural[y][x]?.id).toBe(redBead.id)
+          }
+        }
+      })
+
+      it('5. Dos regiones estructurales grandes mantienen sus respectivos colores', () => {
+        // Mitad izquierda roja (3 cols), mitad derecha azul (3 cols)
+        const grid: (BeadCell | null)[][] = Array.from({ length: 4 }, () => [
+          redBead, redBead, redBead,
+          blueBead, blueBead, blueBead,
+        ])
+        const structural = extractStructuralGrid(grid as BeadCell[][])
+
+        for (let y = 0; y < 4; y++) {
+          for (let x = 0; x < 3; x++) {
+            expect(structural[y][x]?.id).toBe(redBead.id)
+          }
+          for (let x = 3; x < 6; x++) {
+            expect(structural[y][x]?.id).toBe(blueBead.id)
+          }
+        }
+      })
+
+      it('6. Los colores laterales no se convierten en un único color predominante de toda la fila', () => {
+        const grid: (BeadCell | null)[][] = [
+          [redBead, redBead, redBead, blueBead, blueBead, blueBead],
+          [redBead, redBead, redBead, blueBead, blueBead, blueBead],
+        ]
+        const volume = synthesizeRoundedVolume(grid as BeadCell[][], 5, 5.0)
+
+        // En la mitad izquierda (x=0, lateral izquierdo), todos los vóxeles son rojos
+        for (let z = 0; z < volume.depth; z++) {
+          const v = getVoxel(volume, 0, 0, z)
+          if (v) expect(v.color.id).toBe(redBead.id)
+        }
+
+        // En la mitad derecha (x=5, lateral derecho), todos los vóxeles son azules
+        for (let z = 0; z < volume.depth; z++) {
+          const v = getVoxel(volume, 5, 0, z)
+          if (v) expect(v.color.id).toBe(blueBead.id)
+        }
+      })
+
+      it('7. El color de una región es espacialmente continuo alrededor del volumen', () => {
+        const grid: (BeadCell | null)[][] = Array.from({ length: 4 }, () => [
+          redBead, redBead, redBead,
+          blueBead, blueBead, blueBead,
+        ])
+        const volume = synthesizeRoundedVolume(grid as BeadCell[][], 5, 5.0)
+
+        // Verificar que ningún vóxel rojo invade la zona x >= 3 y viceversa
+        for (let z = 0; z < volume.depth; z++) {
+          for (let y = 0; y < 4; y++) {
+            for (let x = 0; x < 3; x++) {
+              const v = getVoxel(volume, x, y, z)
+              if (v) expect(v.color.id).toBe(redBead.id)
+            }
+            for (let x = 3; x < 6; x++) {
+              const v = getVoxel(volume, x, y, z)
+              if (v) expect(v.color.id).toBe(blueBead.id)
+            }
+          }
+        }
+      })
+    })
+
+    describe('Validaciones Geométricas y Continuidad Espacial', () => {
+      it('8. Cada columna válida (x, y) es estrictamente continua en Z (zMin -> zMax)', () => {
+        const grid = createFaceRow()
+        const depth = 9
+        const volume = synthesizeRoundedVolume(grid, depth, 5.0)
+
+        for (let x = 0; x < 8; x++) {
+          if (grid[0][x] !== null) {
+            const zValues: number[] = []
+            for (let z = 0; z < depth; z++) {
+              if (getVoxel(volume, x, 0, z) !== null) {
+                zValues.push(z)
+              }
+            }
+
+            expect(zValues.length).toBeGreaterThan(0)
+            // Comprobar que no hay saltos (z continuo)
+            for (let i = 0; i < zValues.length - 1; i++) {
+              expect(zValues[i + 1] - zValues[i]).toBe(1)
+            }
+          }
+        }
+      })
+
+      it('9. No existen agujeros accidentales en las superficies X/Y', () => {
+        const grid: (BeadCell | null)[][] = Array.from({ length: 6 }, () =>
+          Array.from({ length: 8 }, () => redBead)
+        )
+        const depth = 7
+        const volume = synthesizeRoundedVolume(grid as BeadCell[][], depth, 5.0)
+
+        // En cada capa Z, para cualquier fila, los vóxeles activos en X deben formar un segmento continuo
+        for (let z = 0; z < depth; z++) {
+          for (let y = 0; y < 6; y++) {
+            const xActive: number[] = []
+            for (let x = 0; x < 8; x++) {
+              if (getVoxel(volume, x, y, z) !== null) {
+                xActive.push(x)
+              }
+            }
+
+            if (xActive.length > 0) {
+              for (let i = 0; i < xActive.length - 1; i++) {
+                expect(xActive[i + 1] - xActive[i]).toBe(1)
+              }
+            }
+          }
+        }
+      })
+
+      it('10. No aparecen vóxeles fuera de la silueta 2D válida', () => {
+        // Figura en cruz (+) con esquinas null
+        const grid: (BeadCell | null)[][] = [
+          [null, redBead, null],
+          [redBead, redBead, redBead],
+          [null, redBead, null],
+        ]
+        const volume = synthesizeRoundedVolume(grid as BeadCell[][], 5, 5.0)
+
+        for (let z = 0; z < volume.depth; z++) {
+          expect(getVoxel(volume, 0, 0, z)).toBeNull()
+          expect(getVoxel(volume, 2, 0, z)).toBeNull()
+          expect(getVoxel(volume, 0, 2, z)).toBeNull()
+          expect(getVoxel(volume, 2, 2, z)).toBeNull()
+        }
+      })
+
+      it('11. Los huecos/concavidades reales del diseño 2D se conservan en todas las capas Z', () => {
+        // Anillo (donut) con centro transparente
+        const grid: (BeadCell | null)[][] = [
+          [redBead, redBead, redBead],
+          [redBead, null, redBead],
+          [redBead, redBead, redBead],
+        ]
+        const volume = synthesizeRoundedVolume(grid as BeadCell[][], 5, 5.0)
+
+        for (let z = 0; z < volume.depth; z++) {
+          expect(getVoxel(volume, 1, 1, z)).toBeNull()
+        }
+      })
+
+      it('12. Las superficies exteriores no se perforan durante el ahuecado en cross_ribs', () => {
+        const grid: (BeadCell | null)[][] = Array.from({ length: 6 }, () =>
+          Array.from({ length: 6 }, () => redBead)
+        )
+        const depth = 5
+        const grid3D = synthesizeRoundedVolume(grid as BeadCell[][], depth, 5.0)
+        const interior3D = identifyInteriorVoxels3D(grid3D, 1)
+        const plates = generateInterlockingPlates(grid as BeadCell[][], 'cross_ribs', depth, 5.0)
+
+        // Comprobar que NINGÚN vóxel de superficie exterior (interior3D === false) ha sido eliminado en las placas
+        for (let z = 0; z < depth; z++) {
+          const plate = plates.find((p) => p.id === `layer_${z + 1}`)!
+          expect(plate).toBeDefined()
+
+          for (let y = 0; y < 6; y++) {
+            for (let x = 0; x < 6; x++) {
+              const voxel = grid3D.voxels[z][y][x]
+              if (voxel !== null && !interior3D[z]?.[y]?.[x]) {
+                // Es superficie exterior: debe estar obligatoriamente presente en la placa (no perforado)
+                expect(plate.cells[y][x]).not.toBeNull()
+              }
+            }
+          }
+        }
+      })
+
+      it('13. El eje interno sigue teniendo su espacio necesario en el núcleo', () => {
+        const grid: (BeadCell | null)[][] = Array.from({ length: 8 }, () =>
+          Array.from({ length: 8 }, () => redBead)
+        )
+        const depth = 5
+        const plates = generateInterlockingPlates(grid as BeadCell[][], 'cross_ribs', depth, 5.0)
+
+        const spine = plates.find((p) => p.id === 'spine_1')
+        expect(spine).toBeDefined()
+
+        let spineActive = 0
+        spine?.cells.forEach((row) => {
+          row.forEach((cell) => {
+            if (cell !== null) spineActive++
+          })
+        })
+        expect(spineActive).toBeGreaterThan(0)
+      })
+
+      it('14. No existen colisiones espaciales entre el eje interno y las placas del cuerpo', () => {
+        const grid: (BeadCell | null)[][] = Array.from({ length: 8 }, () =>
+          Array.from({ length: 8 }, () => redBead)
+        )
+        const depth = 5
+        const plates = generateInterlockingPlates(grid as BeadCell[][], 'cross_ribs', depth, 5.0)
+
+        const occupancy = new Set<string>()
+
+        for (const plate of plates) {
+          const [posX, posY, posZ] = plate.position3D
+          const d = 5.0
+
+          for (let r = 0; r < plate.cells.length; r++) {
+            for (let c = 0; c < plate.cells[r].length; c++) {
+              if (plate.cells[r][c] !== null) {
+                let x = 0
+                let y = 0
+                let z = 0
+
+                if (plate.orientation === 'xy') {
+                  x = Math.round((posX + (c + 0.5) * d - 0.5 * d) / d)
+                  y = Math.round(-(posY - (r + 0.5) * d + 0.5 * d) / d)
+                  z = Math.round((posZ + 0.5 * d - 0.5 * d) / d)
+                } else if (plate.orientation === 'yz') {
+                  x = Math.round((posX + 0.5 * d - 0.5 * d) / d)
+                  y = Math.round(-(posY - (r + 0.5) * d + 0.5 * d) / d)
+                  z = Math.round((posZ + (c + 0.5) * d - 0.5 * d) / d)
+                }
+
+                const key = `${x},${y},${z}`
+                expect(occupancy.has(key)).toBe(false)
+                occupancy.add(key)
+              }
+            }
+          }
+        }
+      })
+    })
+
+    describe('Integridad Global', () => {
+      it('15. cross_ribs genera el número esperado de capas y la columna conectora', () => {
+        const grid: (BeadCell | null)[][] = Array.from({ length: 6 }, () =>
+          Array.from({ length: 6 }, () => redBead)
+        )
+        const depth = 5
+        const plates = generateInterlockingPlates(grid as BeadCell[][], 'cross_ribs', depth, 5.0)
+
+        const bodyPlates = plates.filter((p) => p.orientation === 'xy')
+        expect(bodyPlates).toHaveLength(depth)
+
+        const spinePlate = plates.find((p) => p.orientation === 'yz')
+        expect(spinePlate).toBeDefined()
+      })
+
+      it('16. El BOM de cuentas coincide con el total de perlas en computeModel3D', () => {
+        const grid: (BeadCell | null)[][] = Array.from({ length: 6 }, () =>
+          Array.from({ length: 6 }, () => redBead)
+        )
+        const gridData: GridData = {
+          cells: grid as BeadCell[][],
+          cols: 6,
+          rows: 6,
+        }
+
+        const model = computeModel3D(gridData, {
+          mode3d: 'interlocking',
+          hollowLayersCount: 5,
+          hollowWallThickness: 1,
+          interlockingType: 'cross_ribs',
+          interlockingDepthBeads: 5,
+          reliefLevels: 3,
+          diameterMm: 5.0,
+        })
+
+        expect(model).not.toBeNull()
+        expect(model?.mode).toBe('interlocking')
+
+        let platesSum = 0
+        model?.plates?.forEach((plate) => {
+          plate.cells.forEach((row) => {
+            row.forEach((cell) => {
+              if (cell !== null) platesSum++
+            })
+          })
+        })
+
+        expect(model?.totalBeads).toBe(platesSum)
+      })
     })
   })
 })
